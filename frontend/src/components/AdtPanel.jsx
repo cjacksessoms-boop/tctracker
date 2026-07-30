@@ -1,4 +1,4 @@
-import { stormToJtwcCode } from "../utils/atcf.js";
+import { getJtwcCode } from "../utils/atcf.js";
 import IframeEmbedPanel from "./IframeEmbedPanel.jsx";
 
 // CIMSS publishes per-storm ADT (Advanced Dvorak Technique) intensity
@@ -10,7 +10,7 @@ function adtUrl(stormCode) {
 }
 
 export default function AdtPanel({ storm }) {
-  const stormCode = stormToJtwcCode(storm.id);
+  const stormCode = getJtwcCode(storm);
 
   if (!stormCode) {
     return (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { stormToJtwcCode } from "../utils/atcf.js";
+import { getJtwcCode } from "../utils/atcf.js";
 
 // ----------------------------------------------------------------------------
 // tropicaltidbits storm-specific model maps follow this pattern (confirmed
@@ -64,7 +64,7 @@ export default function ModelMapsPanel({ storm }) {
   const [frame, setFrame] = useState(1);
   const [status, setStatus] = useState("searching"); // searching | ready | notfound
 
-  const stormCode = stormToJtwcCode(storm.id);
+  const stormCode = getJtwcCode(storm);
 
   // Reset the search whenever the storm/model/param changes.
   useEffect(() => {

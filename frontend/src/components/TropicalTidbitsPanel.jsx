@@ -1,4 +1,4 @@
-import { stormToJtwcCode } from "../utils/atcf.js";
+import { getJtwcCode } from "../utils/atcf.js";
 import IframeEmbedPanel from "./IframeEmbedPanel.jsx";
 
 // tropicaltidbits' model page takes the storm's JTWC-style region code as
@@ -12,7 +12,7 @@ function tidbitsUrl(stormCode) {
 }
 
 export default function TropicalTidbitsPanel({ storm }) {
-  const stormCode = stormToJtwcCode(storm.id);
+  const stormCode = getJtwcCode(storm);
 
   if (!stormCode) {
     return (
