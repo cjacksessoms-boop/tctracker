@@ -12,6 +12,7 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
+import { classifyIntensity } from "../utils/intensity.js";
 
 // Leaflet's default marker icons reference image files in a way that
 // doesn't play nicely with Vite's bundler by default. This block fixes
@@ -69,21 +70,6 @@ const KNOWN_MODELS = {
   UKMI: "UKMET (interpolated)",
   CMC: "CMC (Canadian)",
 };
-
-// Standard Saffir-Simpson-style classification, using knots (the unit
-// ATCF/NHC use natively - no conversion needed). Colors follow the
-// conventional scheme most hurricane graphics use, so it should look
-// familiar if you've seen NHC or tropicaltidbits maps before.
-function classifyIntensity(vmaxKt) {
-  if (vmaxKt == null) return { label: "Unknown", color: "#8a93a6" };
-  if (vmaxKt < 34) return { label: "Tropical Depression", color: "#8fd3ff" };
-  if (vmaxKt < 64) return { label: "Tropical Storm", color: "#3fa9f5" };
-  if (vmaxKt < 83) return { label: "Category 1", color: "#ffd43b" };
-  if (vmaxKt < 96) return { label: "Category 2", color: "#ffa94d" };
-  if (vmaxKt < 113) return { label: "Category 3", color: "#ff6b6b" };
-  if (vmaxKt < 137) return { label: "Category 4", color: "#f06595" };
-  return { label: "Category 5", color: "#cc5de8" };
-}
 
 export default function StormMap({ storms, selectedStorm, onSelect }) {
   const [coneGeoJson, setConeGeoJson] = useState(null);
@@ -199,8 +185,8 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
         style={{ height: "420px", width: "100%", borderRadius: "8px" }}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
 
         {storms.map((storm) =>
@@ -250,7 +236,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
                         center={[p.lat, p.lon]}
                         radius={5}
                         pathOptions={{
-                          color: "#0b1220", // dark outline so markers stand out
+                          color: "#05070c", // dark outline so markers stand out
                           weight: 1,
                           fillColor: color,
                           fillOpacity: 0.95,
