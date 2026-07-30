@@ -1,6 +1,6 @@
 import { useState } from "react";
 import ModelMapsPanel from "./ModelMapsPanel.jsx";
-import TropicalTidbitsPanel from "./TropicalTidbitsPanel.jsx";
+import CyclonicWxPanel from "./CyclonicWxPanel.jsx";
 import WeatherfrontPanel from "./WeatherfrontPanel.jsx";
 import IframeEmbedPanel from "./IframeEmbedPanel.jsx";
 import AdtPanel from "./AdtPanel.jsx";
@@ -24,7 +24,7 @@ function nrlmryUrl(storm) {
 
 export default function StormDetail({ storm }) {
   const [tab, setTab] = useState("overview");
-  const [modelsMode, setModelsMode] = useState("weatherfront"); // weatherfront | fallback | tidbits
+  const [modelsMode, setModelsMode] = useState("weatherfront"); // weatherfront | fallback | cyclonicwx
 
   return (
     <div className="storm-detail">
@@ -93,14 +93,14 @@ export default function StormDetail({ storm }) {
                 GFS Viewer
               </button>
               <button
-                className={`tab-button ${modelsMode === "tidbits" ? "active" : ""}`}
-                onClick={() => setModelsMode("tidbits")}
+                className={`tab-button ${modelsMode === "cyclonicwx" ? "active" : ""}`}
+                onClick={() => setModelsMode("cyclonicwx")}
               >
-                tropicaltidbits
+                CyclonicWX
               </button>
             </div>
             {modelsMode === "fallback" && <ModelMapsPanel storm={storm} />}
-            {modelsMode === "tidbits" && <TropicalTidbitsPanel storm={storm} />}
+            {modelsMode === "cyclonicwx" && <CyclonicWxPanel />}
             {modelsMode === "weatherfront" && <WeatherfrontPanel />}
           </div>
         )}
