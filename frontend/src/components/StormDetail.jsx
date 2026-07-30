@@ -4,6 +4,7 @@ import TropicalTidbitsPanel from "./TropicalTidbitsPanel.jsx";
 import WeatherfrontPanel from "./WeatherfrontPanel.jsx";
 import IframeEmbedPanel from "./IframeEmbedPanel.jsx";
 import AdtPanel from "./AdtPanel.jsx";
+import SpaghettiImagePanel from "./SpaghettiImagePanel.jsx";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -63,8 +64,14 @@ export default function StormDetail({ storm }) {
         )}
 
         {tab === "spaghetti" && (
-          <div className="placeholder-panel">
-            <p>Model tracks are plotted on the map above, with an intensity legend.</p>
+          <div className="models-tab">
+            <div className="placeholder-panel">
+              <p>
+                Model tracks for NHC-covered storms are also plotted
+                directly on the map above, with an intensity legend.
+              </p>
+            </div>
+            <SpaghettiImagePanel storm={storm} />
           </div>
         )}
 

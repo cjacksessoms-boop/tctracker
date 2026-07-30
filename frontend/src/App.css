@@ -225,3 +225,18 @@ body {
 
 .models-tab { display: flex; flex-direction: column; gap: 12px; }
 .models-mode-toggle { display: flex; gap: 6px; }
+
+.spaghetti-image-panel { display: flex; flex-direction: column; gap: 16px; }
+.spaghetti-image-block { display: flex; flex-direction: column; gap: 6px; }
+.spaghetti-image-label {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #c3cadb;
+  font-weight: 600;
+}
+.spaghetti-image {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #2a3a5c;
+  background: #0f1626;
+}
