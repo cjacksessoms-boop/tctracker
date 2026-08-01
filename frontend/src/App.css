@@ -384,6 +384,24 @@ a { color: var(--scope); }
 }
 
 .satellite-loop-panel { display: flex; flex-direction: column; gap: 10px; }
+.loop-frame-stack {
+  position: relative;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+  overflow: hidden;
+}
+.loop-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* No transition here on purpose - a fade would blur fast-moving
+     satellite motion between frames. This is an instant swap, just
+     handled as a cheap compositor opacity flip instead of a decode. */
+}
 .loop-scrubber {
   flex: 1;
   accent-color: var(--scope);

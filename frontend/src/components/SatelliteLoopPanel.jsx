@@ -4,39 +4,28 @@ import { getJtwcCode } from "../utils/atcf.js";
 // See App.jsx for the explanation of this env var.
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
-// ms between frames during autoplay, used only for the wrap-around
-// transition (last frame back to first), since real elapsed time doesn't
-// mean much there.
-const PLAYBACK_MS_DEFAULT = 180;
+// A fixed, fast frame rate. We initially made this adaptive to real time
+// gaps between frames, but real data turned out to be evenly spaced
+// (confirmed via the backend's actual listing) - the unevenness you saw
+// earlier was your machine lagging, not the data. So a simple constant
+// pace is both simpler and, at this speed, actually smoother-looking
+// than the variable-duration version.
+const PLAYBACK_MS = 80;
 
-// Base playback pace, in ms of screen-time per second of real-world time
-// elapsed between two frames. A typical ~150s gap plays for about 180ms;
-// a 600s (10 min) gap would play for 720ms if left unclamped, which is
-// why we clamp it - long enough to register as "this jumped further,"
-// short enough not to feel like the loop stalled.
-const MS_PER_REAL_SECOND = 1.2;
-const MIN_FRAME_MS = 100;
-const MAX_FRAME_MS = 550;
-
-// timestamp is "YYYYMMDDHHMMSS" - parse into a real comparable moment.
-function parseTimestamp(ts) {
-  const y = ts.slice(0, 4), mo = ts.slice(4, 6), d = ts.slice(6, 8);
-  const h = ts.slice(8, 10), mi = ts.slice(10, 12), s = ts.slice(12, 14);
-  return Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
-}
-
+// Loading an image getting cached (onload) is NOT the same as it being
+// fully decoded and ready to paint instantly. Swapping <img src> during
+// playback can still cause a decode-triggered stutter the first time
+// each frame is actually displayed, even if it's sitting in cache.
+// img.decode() forces that decode work to happen now, during the loading
+// screen, instead of during playback.
 function preloadImage(frame) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    // Some servers block "hotlinked" images by checking the Referer
-    // header and rejecting requests that didn't come from their own
-    // site. Telling the browser not to send that header at all is a
-    // common, low-risk way around that.
-    img.referrerPolicy = "no-referrer";
-    img.onload = () => resolve(frame);
-    img.onerror = () => reject(frame);
-    img.src = frame.url;
-  });
+  const img = new Image();
+  img.referrerPolicy = "no-referrer"; // some servers block hotlinked Referer headers
+  img.src = frame.url;
+  return img
+    .decode()
+    .then(() => ({ ...frame, width: img.naturalWidth, height: img.naturalHeight }))
+    .catch(() => Promise.reject(frame));
 }
 
 export default function SatelliteLoopPanel({ storm }) {
@@ -45,20 +34,10 @@ export default function SatelliteLoopPanel({ storm }) {
   const [listedCount, setListedCount] = useState(0);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
-  const intervalRef = useRef(null);
+  const timeoutRef = useRef(null);
 
   const stormCode = getJtwcCode(storm);
 
-  // Ask our backend for the REAL list of available frames (parsed from
-  // Dapiya's own directory listing) rather than guessing timestamps -
-  // different storms/basins turned out to capture at different, and not
-  // perfectly regular, intervals, so guessing wasn't reliable.
-  //
-  // Once we have the list, we PRELOAD every frame into the browser's
-  // image cache before allowing playback to start. Without this, a fast
-  // frame-swap interval (180ms) outruns how long each image actually
-  // takes to fetch from a remote server, so it looks stuck on one frame
-  // even though the code is technically cycling through all of them.
   useEffect(() => {
     setStatus("loading");
     setFrames([]);
@@ -88,7 +67,7 @@ export default function SatelliteLoopPanel({ storm }) {
         const results = await Promise.allSettled(listed.map(preloadImage));
         if (cancelled) return;
 
-        const loaded = listed.filter((_, i) => results[i].status === "fulfilled");
+        const loaded = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
         if (loaded.length === 0) {
           setStatus("empty");
         } else {
@@ -106,39 +85,23 @@ export default function SatelliteLoopPanel({ storm }) {
     };
   }, [stormCode]);
 
-  // Autoplay loop - each frame's on-screen duration is based on how much
-  // REAL time elapsed before the next frame, not a fixed beat. Without
-  // this, a 10-minute data gap and a 1-minute data gap play at the same
-  // speed, which reads as jerky/stuttery even though the code itself is
-  // running smoothly - the unevenness is in the source data's capture
-  // times, not the playback mechanism.
+  // Autoplay loop, fixed pace - the crossfade rendering (see below) is
+  // what actually makes this look smooth; timing just needs to be
+  // consistent, not adaptive.
   useEffect(() => {
     if (status !== "ok" || !playing || frames.length < 2) return;
-
-    const nextIndex = (index + 1) % frames.length;
-    let durationMs = PLAYBACK_MS_DEFAULT;
-
-    if (nextIndex !== 0) {
-      // Not wrapping back to the start - use the real gap between these
-      // two specific frames.
-      const deltaSeconds =
-        (parseTimestamp(frames[nextIndex].timestamp) - parseTimestamp(frames[index].timestamp)) / 1000;
-      durationMs = Math.min(
-        MAX_FRAME_MS,
-        Math.max(MIN_FRAME_MS, deltaSeconds * MS_PER_REAL_SECOND)
-      );
-    }
-
-    intervalRef.current = setTimeout(() => setIndex(nextIndex), durationMs);
-    return () => clearTimeout(intervalRef.current);
-  }, [status, playing, frames, index]);
+    timeoutRef.current = setInterval(() => {
+      setIndex((i) => (i + 1) % frames.length);
+    }, PLAYBACK_MS);
+    return () => clearInterval(timeoutRef.current);
+  }, [status, playing, frames.length]);
 
   if (status === "loading") {
     return <p className="placeholder-hint">Finding available loop frames…</p>;
   }
 
   if (status === "preloading") {
-    return <p className="placeholder-hint">Loading loop frames into cache…</p>;
+    return <p className="placeholder-hint">Loading and decoding loop frames…</p>;
   }
 
   if (status === "error") {
@@ -158,17 +121,29 @@ export default function SatelliteLoopPanel({ storm }) {
   }
 
   const currentFrame = frames[index];
-  // timestamp is YYYYMMDDHHMMSS - slice out HH:MM for display
   const hhmm = `${currentFrame.timestamp.slice(8, 10)}:${currentFrame.timestamp.slice(10, 12)}`;
+  // Use the first frame's real dimensions to lock the container's aspect
+  // ratio, so stacking every frame absolutely inside it never causes
+  // layout shifts - only opacity changes, which the GPU compositor
+  // handles without any repaint/decode work. This is the actual fix for
+  // per-frame stutter: every frame is already painted once, we're just
+  // toggling which layer is visible.
+  const aspectRatio = frames[0] ? `${frames[0].width} / ${frames[0].height}` : "1 / 1";
 
   return (
     <div className="satellite-loop-panel">
-      <img
-        src={currentFrame.url}
-        alt={`Satellite loop frame for ${storm.name}`}
-        className="spaghetti-image"
-        referrerPolicy="no-referrer"
-      />
+      <div className="loop-frame-stack" style={{ aspectRatio }}>
+        {frames.map((f, i) => (
+          <img
+            key={f.url}
+            src={f.url}
+            alt={`Satellite loop frame for ${storm.name}`}
+            className="loop-frame"
+            style={{ opacity: i === index ? 1 : 0 }}
+            referrerPolicy="no-referrer"
+          />
+        ))}
+      </div>
       <div className="model-maps-frame-bar">
         <button onClick={() => setPlaying((p) => !p)}>
           {playing ? "⏸ Pause" : "▶ Play"}
