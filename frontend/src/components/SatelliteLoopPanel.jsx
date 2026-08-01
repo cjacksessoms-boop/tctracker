@@ -10,6 +10,11 @@ const PLAYBACK_MS = 180;
 function preloadImage(frame) {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // Some servers block "hotlinked" images by checking the Referer
+    // header and rejecting requests that didn't come from their own
+    // site. Telling the browser not to send that header at all is a
+    // common, low-risk way around that.
+    img.referrerPolicy = "no-referrer";
     img.onload = () => resolve(frame);
     img.onerror = () => reject(frame);
     img.src = frame.url;
@@ -19,6 +24,7 @@ function preloadImage(frame) {
 export default function SatelliteLoopPanel({ storm }) {
   const [status, setStatus] = useState("loading"); // loading | preloading | ok | empty | error
   const [frames, setFrames] = useState([]);
+  const [listedCount, setListedCount] = useState(0);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const intervalRef = useRef(null);
@@ -60,6 +66,7 @@ export default function SatelliteLoopPanel({ storm }) {
         }
 
         setStatus("preloading");
+        setListedCount(listed.length);
         const results = await Promise.allSettled(listed.map(preloadImage));
         if (cancelled) return;
 
@@ -124,6 +131,7 @@ export default function SatelliteLoopPanel({ storm }) {
         src={currentFrame.url}
         alt={`Satellite loop frame for ${storm.name}`}
         className="spaghetti-image"
+        referrerPolicy="no-referrer"
       />
       <div className="model-maps-frame-bar">
         <button onClick={() => setPlaying((p) => !p)}>
@@ -142,6 +150,11 @@ export default function SatelliteLoopPanel({ storm }) {
         />
         <span>{hhmm}Z</span>
       </div>
+      {frames.length < listedCount && (
+        <p className="placeholder-hint">
+          {frames.length} of {listedCount} listed frames loaded successfully.
+        </p>
+      )}
     </div>
   );
 }
