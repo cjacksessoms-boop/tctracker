@@ -5,10 +5,12 @@ import WeatherfrontPanel from "./WeatherfrontPanel.jsx";
 import IframeEmbedPanel from "./IframeEmbedPanel.jsx";
 import AdtPanel from "./AdtPanel.jsx";
 import SpaghettiImagePanel from "./SpaghettiImagePanel.jsx";
+import SatelliteLoopPanel from "./SatelliteLoopPanel.jsx";
 
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "nrlmry", label: "Satellite & Microwave" },
+  { id: "irloop", label: "IR Loop" },
   { id: "spaghetti", label: "Spaghetti Models" },
   { id: "adt", label: "ADT Estimates" },
   { id: "models", label: "Model Runs" },
@@ -62,6 +64,8 @@ export default function StormDetail({ storm }) {
             title={`NRLMRY GeoIPS page for ${storm.name}`}
           />
         )}
+
+        {tab === "irloop" && <SatelliteLoopPanel storm={storm} />}
 
         {tab === "spaghetti" && (
           <div className="models-tab">

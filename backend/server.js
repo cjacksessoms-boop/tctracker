@@ -203,7 +203,57 @@ app.get("/api/proxy", async (req, res) => {
   }
 });
 
+// ----------------------------------------------------------------------------
+// Dapiya's IR satellite loop imagery is served as individual timestamped
+// files, not one animated file (confirmed via your browser's Network
+// tab). We initially tried GUESSING which timestamps exist based on a
+// fixed interval, but real data proved that wrong - different
+// storms/basins capture at different intervals (Dolphin: every 150s,
+// Genevieve: every ~60s), and even a single storm's sequence has gaps
+// (missed frames). So instead, we fetch Dapiya's real directory listing
+// page and parse out the actual filenames that exist - authoritative,
+// not guessed.
+function parseDapiyaListing(html, stormCode) {
+  const pattern = new RegExp(`href="(${stormCode}_OTT_(\\d{14})\\.png)"`, "g");
+  const frames = [];
+  let match;
+  while ((match = pattern.exec(html)) !== null) {
+    frames.push({ filename: match[1], timestamp: match[2] });
+  }
+  frames.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  return frames;
+}
+
+app.get("/api/storm/:stormCode/ir-frames", async (req, res) => {
+  const { stormCode } = req.params; // e.g. "12W", "07E"
+  const listingUrl = `https://data.dapiya.top/history/${stormCode}/OTT/`;
+
+  try {
+    const upstream = await fetch(listingUrl, {
+      headers: { "User-Agent": "cyclone-tracker-hobby-project/1.0" },
+    });
+    if (!upstream.ok) {
+      throw new Error(`Listing request failed: ${upstream.status}`);
+    }
+    const html = await upstream.text();
+    const allFrames = parseDapiyaListing(html, stormCode);
+
+    const RECENT_FRAME_COUNT = 30;
+    const recent = allFrames.slice(-RECENT_FRAME_COUNT).map((f) => ({
+      ...f,
+      url: `https://data.dapiya.top/history/${stormCode}/OTT/${f.filename}`,
+    }));
+
+    res.json({ frames: recent });
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: "Failed to fetch IR frame listing", detail: err.message });
+  }
+});
+
 app.get("/api/health", (req, res) => res.json({ ok: true }));
+
+
 
 app.listen(PORT, () => {
   console.log(`Cyclone tracker backend running at http://localhost:${PORT}`);

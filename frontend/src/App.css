@@ -382,3 +382,9 @@ a { color: var(--scope); }
   border: 1px solid var(--line);
   background: var(--panel-raised);
 }
+
+.satellite-loop-panel { display: flex; flex-direction: column; gap: 10px; }
+.loop-scrubber {
+  flex: 1;
+  accent-color: var(--scope);
+}
