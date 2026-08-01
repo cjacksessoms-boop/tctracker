@@ -4,10 +4,20 @@ import { getJtwcCode } from "../utils/atcf.js";
 // See App.jsx for the explanation of this env var.
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
-const PLAYBACK_MS = 180; // ms between frames during autoplay
+// ms between frames during autoplay
+const PLAYBACK_MS = 180;
+
+function preloadImage(frame) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(frame);
+    img.onerror = () => reject(frame);
+    img.src = frame.url;
+  });
+}
 
 export default function SatelliteLoopPanel({ storm }) {
-  const [status, setStatus] = useState("loading"); // loading | ok | empty | error
+  const [status, setStatus] = useState("loading"); // loading | preloading | ok | empty | error
   const [frames, setFrames] = useState([]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -19,6 +29,12 @@ export default function SatelliteLoopPanel({ storm }) {
   // Dapiya's own directory listing) rather than guessing timestamps -
   // different storms/basins turned out to capture at different, and not
   // perfectly regular, intervals, so guessing wasn't reliable.
+  //
+  // Once we have the list, we PRELOAD every frame into the browser's
+  // image cache before allowing playback to start. Without this, a fast
+  // frame-swap interval (180ms) outruns how long each image actually
+  // takes to fetch from a remote server, so it looks stuck on one frame
+  // even though the code is technically cycling through all of them.
   useEffect(() => {
     setStatus("loading");
     setFrames([]);
@@ -29,14 +45,25 @@ export default function SatelliteLoopPanel({ storm }) {
     }
 
     let cancelled = false;
+
     fetch(`${API_BASE}/api/storm/${stormCode}/ir-frames`)
       .then((res) => {
         if (!res.ok) throw new Error(`Backend returned ${res.status}`);
         return res.json();
       })
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return;
-        const loaded = data.frames ?? [];
+        const listed = data.frames ?? [];
+        if (listed.length === 0) {
+          setStatus("empty");
+          return;
+        }
+
+        setStatus("preloading");
+        const results = await Promise.allSettled(listed.map(preloadImage));
+        if (cancelled) return;
+
+        const loaded = listed.filter((_, i) => results[i].status === "fulfilled");
         if (loaded.length === 0) {
           setStatus("empty");
         } else {
@@ -64,7 +91,11 @@ export default function SatelliteLoopPanel({ storm }) {
   }, [status, playing, frames.length]);
 
   if (status === "loading") {
-    return <p className="placeholder-hint">Loading available loop frames…</p>;
+    return <p className="placeholder-hint">Finding available loop frames…</p>;
+  }
+
+  if (status === "preloading") {
+    return <p className="placeholder-hint">Loading loop frames into cache…</p>;
   }
 
   if (status === "error") {
