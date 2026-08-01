@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ModelMapsPanel from "./ModelMapsPanel.jsx";
 import CyclonicWxPanel from "./CyclonicWxPanel.jsx";
+import CyclonicWxModelViewer from "./CyclonicWxModelViewer.jsx";
 import WeatherfrontPanel from "./WeatherfrontPanel.jsx";
 import IframeEmbedPanel from "./IframeEmbedPanel.jsx";
 import AdtPanel from "./AdtPanel.jsx";
@@ -26,7 +27,7 @@ function nrlmryUrl(storm) {
 
 export default function StormDetail({ storm }) {
   const [tab, setTab] = useState("overview");
-  const [modelsMode, setModelsMode] = useState("weatherfront"); // weatherfront | fallback | cyclonicwx
+  const [modelsMode, setModelsMode] = useState("weatherfront"); // weatherfront | cyclonicwx-viewer | fallback | cyclonicwx-embed
 
   return (
     <div className="storm-detail">
@@ -91,21 +92,28 @@ export default function StormDetail({ storm }) {
                 Weatherfront
               </button>
               <button
+                className={`tab-button ${modelsMode === "cyclonicwx-viewer" ? "active" : ""}`}
+                onClick={() => setModelsMode("cyclonicwx-viewer")}
+              >
+                CyclonicWX Models
+              </button>
+              <button
+                className={`tab-button ${modelsMode === "cyclonicwx-embed" ? "active" : ""}`}
+                onClick={() => setModelsMode("cyclonicwx-embed")}
+              >
+                CyclonicWX (site)
+              </button>
+              <button
                 className={`tab-button ${modelsMode === "fallback" ? "active" : ""}`}
                 onClick={() => setModelsMode("fallback")}
               >
                 GFS Viewer
               </button>
-              <button
-                className={`tab-button ${modelsMode === "cyclonicwx" ? "active" : ""}`}
-                onClick={() => setModelsMode("cyclonicwx")}
-              >
-                CyclonicWX
-              </button>
             </div>
-            {modelsMode === "fallback" && <ModelMapsPanel storm={storm} />}
-            {modelsMode === "cyclonicwx" && <CyclonicWxPanel />}
             {modelsMode === "weatherfront" && <WeatherfrontPanel />}
+            {modelsMode === "cyclonicwx-viewer" && <CyclonicWxModelViewer storm={storm} />}
+            {modelsMode === "cyclonicwx-embed" && <CyclonicWxPanel />}
+            {modelsMode === "fallback" && <ModelMapsPanel storm={storm} />}
           </div>
         )}
       </div>

@@ -4,8 +4,26 @@ import { getJtwcCode } from "../utils/atcf.js";
 // See App.jsx for the explanation of this env var.
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
-// ms between frames during autoplay
-const PLAYBACK_MS = 180;
+// ms between frames during autoplay, used only for the wrap-around
+// transition (last frame back to first), since real elapsed time doesn't
+// mean much there.
+const PLAYBACK_MS_DEFAULT = 180;
+
+// Base playback pace, in ms of screen-time per second of real-world time
+// elapsed between two frames. A typical ~150s gap plays for about 180ms;
+// a 600s (10 min) gap would play for 720ms if left unclamped, which is
+// why we clamp it - long enough to register as "this jumped further,"
+// short enough not to feel like the loop stalled.
+const MS_PER_REAL_SECOND = 1.2;
+const MIN_FRAME_MS = 100;
+const MAX_FRAME_MS = 550;
+
+// timestamp is "YYYYMMDDHHMMSS" - parse into a real comparable moment.
+function parseTimestamp(ts) {
+  const y = ts.slice(0, 4), mo = ts.slice(4, 6), d = ts.slice(6, 8);
+  const h = ts.slice(8, 10), mi = ts.slice(10, 12), s = ts.slice(12, 14);
+  return Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
+}
 
 function preloadImage(frame) {
   return new Promise((resolve, reject) => {
@@ -88,14 +106,32 @@ export default function SatelliteLoopPanel({ storm }) {
     };
   }, [stormCode]);
 
-  // Autoplay loop.
+  // Autoplay loop - each frame's on-screen duration is based on how much
+  // REAL time elapsed before the next frame, not a fixed beat. Without
+  // this, a 10-minute data gap and a 1-minute data gap play at the same
+  // speed, which reads as jerky/stuttery even though the code itself is
+  // running smoothly - the unevenness is in the source data's capture
+  // times, not the playback mechanism.
   useEffect(() => {
     if (status !== "ok" || !playing || frames.length < 2) return;
-    intervalRef.current = setInterval(() => {
-      setIndex((i) => (i + 1) % frames.length);
-    }, PLAYBACK_MS);
-    return () => clearInterval(intervalRef.current);
-  }, [status, playing, frames.length]);
+
+    const nextIndex = (index + 1) % frames.length;
+    let durationMs = PLAYBACK_MS_DEFAULT;
+
+    if (nextIndex !== 0) {
+      // Not wrapping back to the start - use the real gap between these
+      // two specific frames.
+      const deltaSeconds =
+        (parseTimestamp(frames[nextIndex].timestamp) - parseTimestamp(frames[index].timestamp)) / 1000;
+      durationMs = Math.min(
+        MAX_FRAME_MS,
+        Math.max(MIN_FRAME_MS, deltaSeconds * MS_PER_REAL_SECOND)
+      );
+    }
+
+    intervalRef.current = setTimeout(() => setIndex(nextIndex), durationMs);
+    return () => clearTimeout(intervalRef.current);
+  }, [status, playing, frames, index]);
 
   if (status === "loading") {
     return <p className="placeholder-hint">Finding available loop frames…</p>;
