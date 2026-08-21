@@ -11,17 +11,21 @@ import { getJtwcCode } from "../utils/atcf.js";
 // - {frameHour} is the forecast hour, zero-padded to 3 digits (f006, f012...)
 //
 // Model slugs were provided directly by you from the site itself. GFS's
-// frame pattern (starts at f006, steps by 6h) was independently
-// confirmed via a real URL - HAFS models turned out to run on a
-// different cadence (starts at f003), which is why each model below
-// carries its own timing instead of assuming they all match GFS.
+// full pattern (product "4panel", starts at f006, steps by 6h) was
+// independently confirmed via a real URL. HAFS turned out to differ in
+// TWO ways, not just frame timing - it also uses a different product
+// name in the URL path ("uv10" instead of "4panel"), confirmed via a
+// real HAFS-A Parent URL. The other three HAFS variants below use that
+// same "uv10" product as a reasonable extrapolation from the confirmed
+// one (same model family) - if any of them still don't work, that's the
+// next thing to verify with a real URL the same way.
 const MODEL_OPTIONS = [
-  { value: "gfs", label: "GFS", startFrame: 6, stepHours: 6 },
-  { value: "ecmwf", label: "ECMWF (Euro)", startFrame: 6, stepHours: 6 },
-  { value: "hafsai", label: "HAFS-A", startFrame: 3, stepHours: 3 },
-  { value: "hafsao", label: "HAFS-A Parent", startFrame: 3, stepHours: 3 },
-  { value: "hafsbi", label: "HAFS-B", startFrame: 3, stepHours: 3 },
-  { value: "hafsbo", label: "HAFS-B Parent", startFrame: 3, stepHours: 3 },
+  { value: "gfs", label: "GFS", product: "4panel", startFrame: 6, stepHours: 6 },
+  { value: "ecmwf", label: "ECMWF (Euro)", product: "4panel", startFrame: 6, stepHours: 6 },
+  { value: "hafsai", label: "HAFS-A", product: "uv10", startFrame: 3, stepHours: 3 },
+  { value: "hafsao", label: "HAFS-A Parent", product: "uv10", startFrame: 3, stepHours: 3 },
+  { value: "hafsbi", label: "HAFS-B", product: "uv10", startFrame: 3, stepHours: 3 },
+  { value: "hafsbo", label: "HAFS-B Parent", product: "uv10", startFrame: 3, stepHours: 3 },
 ];
 
 // How far out to probe for additional frames once a cycle is found.
@@ -48,9 +52,9 @@ function recentCycles(count = 8) {
   return cycles;
 }
 
-function buildUrl(model, cycle, stormCode, frameHour) {
+function buildUrl(model, cycle, stormCode, frameHour, product) {
   const f = String(frameHour).padStart(3, "0");
-  return `https://cyclonicwx.com/data/models/${model}/${stormCode}/4panel/${model}_${stormCode}_4panel_${cycle}_f${f}.png`;
+  return `https://cyclonicwx.com/data/models/${model}/${stormCode}/${product}/${model}_${stormCode}_${product}_${cycle}_f${f}.png`;
 }
 
 // Same technique as the IR loop: fully decode each image before playback
@@ -87,7 +91,7 @@ export default function CyclonicWxModelViewer({ storm }) {
 
     let cancelled = false;
     const modelConfig = MODEL_OPTIONS.find((m) => m.value === model);
-    const { startFrame, stepHours } = modelConfig;
+    const { product, startFrame, stepHours } = modelConfig;
 
     async function run() {
       // Step 1: find the most recent cycle that actually has data, by
@@ -96,7 +100,7 @@ export default function CyclonicWxModelViewer({ storm }) {
       let foundCycle = null;
       for (const cycle of cycles) {
         try {
-          await preloadFrame(buildUrl(model, cycle, stormCode, startFrame), startFrame);
+          await preloadFrame(buildUrl(model, cycle, stormCode, startFrame, product), startFrame);
           foundCycle = cycle;
           break;
         } catch {
@@ -121,7 +125,7 @@ export default function CyclonicWxModelViewer({ storm }) {
         candidates.push(h);
       }
       const results = await Promise.allSettled(
-        candidates.map((h) => preloadFrame(buildUrl(model, foundCycle, stormCode, h), h))
+        candidates.map((h) => preloadFrame(buildUrl(model, foundCycle, stormCode, h, product), h))
       );
       if (cancelled) return;
 
