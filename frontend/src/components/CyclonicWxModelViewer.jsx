@@ -22,6 +22,13 @@ const MODEL_OPTIONS = [
 ];
 
 const FRAME_STEP_HOURS = 6;
+// Start guessing at the one frame we've actually confirmed exists
+// (f006). f000 may not be published for this product at all - starting
+// there meant every single cycle guess failed on the very first check,
+// which our search logic misread as "wrong cycle" and burned through
+// every candidate before giving up, even when the right cycle was there
+// all along.
+const STARTING_FRAME_HOUR = 6;
 
 function recentCycles(count = 8) {
   const PUBLISH_DELAY_HOURS = 5;
@@ -50,14 +57,14 @@ export default function CyclonicWxModelViewer({ storm }) {
   const [model, setModel] = useState(MODEL_OPTIONS[0].value);
   const [cycles] = useState(() => recentCycles());
   const [cycleIndex, setCycleIndex] = useState(0);
-  const [frameHour, setFrameHour] = useState(0);
+  const [frameHour, setFrameHour] = useState(STARTING_FRAME_HOUR);
   const [status, setStatus] = useState("searching"); // searching | ready | notfound
 
   const stormCode = getJtwcCode(storm);
 
   useEffect(() => {
     setCycleIndex(0);
-    setFrameHour(0);
+    setFrameHour(STARTING_FRAME_HOUR);
     setStatus(stormCode ? "searching" : "notfound");
   }, [storm.id, model, stormCode]);
 
@@ -78,8 +85,8 @@ export default function CyclonicWxModelViewer({ storm }) {
       } else {
         setStatus("notfound");
       }
-    } else if (status === "ready" && frameHour > 0) {
-      setFrameHour((f) => Math.max(0, f - FRAME_STEP_HOURS));
+    } else if (status === "ready" && frameHour > STARTING_FRAME_HOUR) {
+      setFrameHour((f) => Math.max(STARTING_FRAME_HOUR, f - FRAME_STEP_HOURS));
     }
   }
 
@@ -132,8 +139,8 @@ export default function CyclonicWxModelViewer({ storm }) {
           {status === "ready" && (
             <div className="model-maps-frame-bar">
               <button
-                onClick={() => setFrameHour((f) => Math.max(0, f - FRAME_STEP_HOURS))}
-                disabled={frameHour <= 0}
+                onClick={() => setFrameHour((f) => Math.max(STARTING_FRAME_HOUR, f - FRAME_STEP_HOURS))}
+                disabled={frameHour <= STARTING_FRAME_HOUR}
               >
                 ← Prev
               </button>
