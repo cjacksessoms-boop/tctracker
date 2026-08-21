@@ -10,24 +10,20 @@ import { getJtwcCode } from "../utils/atcf.js";
 // - {init} is the model's run/init time as YYYYMMDDHH (UTC)
 // - {frameHour} is the forecast hour, zero-padded to 3 digits (f006, f012...)
 //
-// Model slugs below were provided directly by you from the site itself,
-// not independently re-verified via a pasted URL like "gfs" was - if any
-// of these come back "not found," that's the first thing to double-check.
-// ----------------------------------------------------------------------------
-
+// Model slugs were provided directly by you from the site itself. GFS's
+// frame pattern (starts at f006, steps by 6h) was independently
+// confirmed via a real URL - HAFS models turned out to run on a
+// different cadence (starts at f003), which is why each model below
+// carries its own timing instead of assuming they all match GFS.
 const MODEL_OPTIONS = [
-  { value: "gfs", label: "GFS" },
-  { value: "ecmwf", label: "ECMWF (Euro)" },
-  { value: "hafsai", label: "HAFS-A" },
-  { value: "hafsao", label: "HAFS-A Parent" },
-  { value: "hafsbi", label: "HAFS-B" },
-  { value: "hafsbo", label: "HAFS-B Parent" },
+  { value: "gfs", label: "GFS", startFrame: 6, stepHours: 6 },
+  { value: "ecmwf", label: "ECMWF (Euro)", startFrame: 6, stepHours: 6 },
+  { value: "hafsai", label: "HAFS-A", startFrame: 3, stepHours: 3 },
+  { value: "hafsao", label: "HAFS-A Parent", startFrame: 3, stepHours: 3 },
+  { value: "hafsbi", label: "HAFS-B", startFrame: 3, stepHours: 3 },
+  { value: "hafsbo", label: "HAFS-B Parent", startFrame: 3, stepHours: 3 },
 ];
 
-const FRAME_STEP_HOURS = 6;
-// Start guessing at the one frame we've actually confirmed exists (f006)
-// - f000 isn't confirmed to be published for this product at all.
-const STARTING_FRAME_HOUR = 6;
 // How far out to probe for additional frames once a cycle is found.
 // Extra probes past a model's real max forecast length just fail to
 // load and get dropped - harmless, just a few wasted requests.
@@ -90,15 +86,17 @@ export default function CyclonicWxModelViewer({ storm }) {
     if (!stormCode) return;
 
     let cancelled = false;
+    const modelConfig = MODEL_OPTIONS.find((m) => m.value === model);
+    const { startFrame, stepHours } = modelConfig;
 
     async function run() {
       // Step 1: find the most recent cycle that actually has data, by
-      // testing the one confirmed frame (f006) against each candidate
-      // cycle, newest first.
+      // testing this model's confirmed starting frame against each
+      // candidate cycle, newest first.
       let foundCycle = null;
       for (const cycle of cycles) {
         try {
-          await preloadFrame(buildUrl(model, cycle, stormCode, STARTING_FRAME_HOUR), STARTING_FRAME_HOUR);
+          await preloadFrame(buildUrl(model, cycle, stormCode, startFrame), startFrame);
           foundCycle = cycle;
           break;
         } catch {
@@ -116,10 +114,10 @@ export default function CyclonicWxModelViewer({ storm }) {
       setStatus("preloading");
 
       // Step 2: now that we know the cycle is real, probe+preload every
-      // forecast hour out to MAX_FRAME_HOUR in parallel. Whichever ones
-      // succeed become the loop, in order.
+      // forecast hour out to MAX_FRAME_HOUR in parallel, at this model's
+      // own step interval. Whichever ones succeed become the loop, in order.
       const candidates = [];
-      for (let h = STARTING_FRAME_HOUR; h <= MAX_FRAME_HOUR; h += FRAME_STEP_HOURS) {
+      for (let h = startFrame; h <= MAX_FRAME_HOUR; h += stepHours) {
         candidates.push(h);
       }
       const results = await Promise.allSettled(
