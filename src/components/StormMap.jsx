@@ -217,7 +217,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
       </div>
 
       <div className="panel-body panel-body-flush">
-        <MapContainer center={[20, -60]} zoom={3} className="map-canvas" zoomControl={true}>
+        <MapContainer center={[20, -60]} zoom={3} className="map-canvas" zoomControl={true} scrollWheelZoom={false}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
