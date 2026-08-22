@@ -1,16 +1,41 @@
-// Standard Saffir-Simpson-style classification, using knots (the unit
-// ATCF/NHC/JTWC all use natively - no conversion needed). This is used
-// both for the map's intensity dots AND the sidebar's category accent
-// bars, so the same color always means the same thing everywhere in the
-// app - that consistency is deliberate, not incidental.
+// Saffir-Simpson classification using knots (the unit ATCF/NHC/JTWC all
+// use natively - no conversion needed).
+//
+// The color scale here is the standard Saffir-Simpson palette used on
+// official/reference track maps, so the app reads like real operational
+// products rather than an arbitrary theme. These same colors are the
+// app's only data-encoding colors: map markers, sidebar category bars,
+// category badges, and legends all pull from here, so a given color
+// always means exactly one thing everywhere in the UI.
+const SCALE = [
+  { max: 34,       label: "Tropical Depression", short: "TD", color: "#5ebaff" },
+  { max: 64,       label: "Tropical Storm",      short: "TS", color: "#00faf4" },
+  { max: 83,       label: "Category 1",          short: "C1", color: "#ffffcc" },
+  { max: 96,       label: "Category 2",          short: "C2", color: "#ffe775" },
+  { max: 113,      label: "Category 3",          short: "C3", color: "#ffc140" },
+  { max: 137,      label: "Category 4",          short: "C4", color: "#ff8f20" },
+  { max: Infinity, label: "Category 5",          short: "C5", color: "#ff6060" },
+];
+
+const UNKNOWN = { label: "Unknown", short: "--", color: "#64748b" };
+
 export function classifyIntensity(vmaxKt) {
   const kt = typeof vmaxKt === "string" ? parseFloat(vmaxKt) : vmaxKt;
-  if (kt == null || Number.isNaN(kt)) return { label: "Unknown", color: "#7c8aa8" };
-  if (kt < 34) return { label: "Tropical Depression", color: "#8fd3ff" };
-  if (kt < 64) return { label: "Tropical Storm", color: "#3fa9f5" };
-  if (kt < 83) return { label: "Category 1", color: "#ffd43b" };
-  if (kt < 96) return { label: "Category 2", color: "#ffa94d" };
-  if (kt < 113) return { label: "Category 3", color: "#ff6b6b" };
-  if (kt < 137) return { label: "Category 4", color: "#f06595" };
-  return { label: "Category 5", color: "#cc5de8" };
+  if (kt == null || Number.isNaN(kt)) return UNKNOWN;
+  return SCALE.find((step) => kt < step.max) ?? UNKNOWN;
+}
+
+// Every category in scale order - used to render legends without
+// hardcoding sample wind speeds at the call site.
+export const INTENSITY_SCALE = SCALE.map(({ label, short, color }) => ({
+  label,
+  short,
+  color,
+}));
+
+// Major hurricane = Cat 3+. Worth calling out separately in the UI
+// because it's the threshold operational products emphasize.
+export function isMajor(vmaxKt) {
+  const kt = typeof vmaxKt === "string" ? parseFloat(vmaxKt) : vmaxKt;
+  return !Number.isNaN(kt) && kt >= 96;
 }

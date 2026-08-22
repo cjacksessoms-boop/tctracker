@@ -107,30 +107,35 @@ export default function ModelMapsPanel({ storm }) {
   }
 
   return (
-    <div className="model-maps-panel">
-      <div className="model-maps-controls">
-        <label>
-          Model:
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {MODEL_OPTIONS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Field:
-          <select value={param} onChange={(e) => setParam(e.target.value)}>
-            {PARAM_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-        </label>
+    <div className="imagery-panel">
+      <div className="imagery-controls">
+        <span className="field-label">Model</span>
+        <select
+          className="ctl-select"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+        >
+          {MODEL_OPTIONS.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
+
+        <span className="field-label">Field</span>
+        <select
+          className="ctl-select"
+          value={param}
+          onChange={(e) => setParam(e.target.value)}
+        >
+          {PARAM_OPTIONS.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+        </select>
       </div>
 
       {status === "searching" && (
         <p className="placeholder-hint">
-          Looking for the latest available {model.toUpperCase()} run for
-          this storm…
+          <span className="spinner" />
+          Looking for the latest available {model.toUpperCase()} run…
         </p>
       )}
 
@@ -153,20 +158,29 @@ export default function ModelMapsPanel({ storm }) {
             key={url}
             src={url}
             alt={`${model.toUpperCase()} run for ${storm.name}, frame ${frame}`}
-            className="model-map-image"
+            className="static-image"
             onError={handleImgError}
             onLoad={handleImgLoad}
           />
 
           {status === "ready" && (
-            <div className="model-maps-frame-bar">
-              <button onClick={() => setFrame((f) => Math.max(1, f - 1))} disabled={frame <= 1}>
+            <div className="playback-bar">
+              <button
+                className="ctl"
+                onClick={() => setFrame((f) => Math.max(1, f - 1))}
+                disabled={frame <= 1}
+              >
                 ← Prev
               </button>
-              <span>Init {cycles[cycleIndex]}Z · Frame {frame}</span>
-              <button onClick={() => setFrame((f) => f + 1)}>Next →</button>
-              <a href={url} target="_blank" rel="noreferrer" className="open-new-tab-link">
-                ↗ Full size
+              <button className="ctl" onClick={() => setFrame((f) => f + 1)}>
+                Next →
+              </button>
+              <div className="toolbar-spacer" />
+              <span className="playback-time">
+                Init {cycles[cycleIndex]}Z · F{frame}
+              </span>
+              <a href={url} target="_blank" rel="noreferrer" className="ctl">
+                Full size ↗
               </a>
             </div>
           )}

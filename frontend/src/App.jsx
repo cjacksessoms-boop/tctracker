@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import StormList from "./components/StormList.jsx";
 import StormMap from "./components/StormMap.jsx";
 import StormDetail from "./components/StormDetail.jsx";
+import StormHeader from "./components/StormHeader.jsx";
 import { fetchKnackwxStorms } from "./utils/knackwx.js";
+import { isMajor } from "./utils/intensity.js";
 
 // Where our backend lives during local development.
 // In local development this defaults to your backend running on
@@ -41,11 +43,49 @@ function buildNhcExtras(nhcActiveStorms) {
   return map;
 }
 
+// Header clock: forecast products are always referenced in UTC/Z time,
+// so that's what an operational header should show - not local time.
+function useUtcClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
+
+function formatZulu(date) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(date.getUTCHours())}:${p(date.getUTCMinutes())}:${p(date.getUTCSeconds())}Z`;
+}
+
+function CycloneMark() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 12c0-3.3 2.7-6 6-6 1.7 0 3 1.3 3 3 0 3.3-4 6-9 6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 12c0 3.3-2.7 6-6 6-1.7 0-3-1.3-3-3 0-3.3 4-6 9-6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="12" r="1.9" fill="currentColor" />
+    </svg>
+  );
+}
+
 export default function App() {
   const [storms, setStorms] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | ok | error
   const [errorMsg, setErrorMsg] = useState("");
+  const [lastSync, setLastSync] = useState(null);
+  const now = useUtcClock();
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +119,7 @@ export default function App() {
         if (!cancelled) {
           setStorms(merged);
           setStatus("ok");
+          setLastSync(new Date());
           // Only auto-select on the very first load - functional update
           // form avoids a stale-closure bug on the refresh interval.
           setSelectedId((prev) => prev ?? merged[0]?.id ?? null);
@@ -102,27 +143,49 @@ export default function App() {
   }, []);
 
   const selectedStorm = storms.find((s) => s.id === selectedId) ?? null;
+  const majorCount = storms.filter((s) => isMajor(s.intensity)).length;
+
+  const feedState =
+    status === "error" ? "is-error" : status === "loading" ? "is-loading" : "is-live";
+  const feedLabel =
+    status === "error"
+      ? "Feed offline"
+      : status === "loading"
+      ? "Syncing"
+      : `Synced ${lastSync ? formatZulu(lastSync) : ""}`;
 
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>🌀 Tropical Cyclone Tracker</h1>
-        <p className="subtitle">Live global storm data</p>
+        <div className="brand">
+          <span className="brand-mark">
+            <CycloneMark />
+          </span>
+          <h1 className="brand-title">Tropical Cyclone Tracker</h1>
+          <span className="brand-sub">Global Operations Console</span>
+        </div>
+
+        <div className="header-spacer" />
+
+        <div className="header-meta">
+          <div className="header-stat">
+            <span className="label-micro">Active</span>
+            <span className="header-stat-value">{String(storms.length).padStart(2, "0")}</span>
+          </div>
+          <div className="header-stat">
+            <span className="label-micro">Major</span>
+            <span className="header-stat-value">{String(majorCount).padStart(2, "0")}</span>
+          </div>
+          <div className="header-stat">
+            <span className="label-micro">UTC</span>
+            <span className="header-stat-value">{formatZulu(now)}</span>
+          </div>
+          <div className={`feed-status ${feedState}`}>
+            <span className="feed-dot" />
+            {feedLabel}
+          </div>
+        </div>
       </header>
-
-      {status === "error" && (
-        <div className="banner banner-error">
-          Couldn't load storm data.
-          <br />
-          <code>{errorMsg}</code>
-        </div>
-      )}
-
-      {status === "ok" && storms.length === 0 && (
-        <div className="banner banner-info">
-          No active storms right now. Quiet skies!
-        </div>
-      )}
 
       <div className="app-body">
         <aside className="sidebar">
@@ -134,14 +197,39 @@ export default function App() {
           />
         </aside>
 
-        <main className="main-panel">
-          <StormMap
-            storms={storms}
-            selectedStorm={selectedStorm}
-            onSelect={setSelectedId}
-          />
-          {selectedStorm && (
-            <StormDetail storm={selectedStorm} apiBase={API_BASE} />
+        <main className="workspace">
+          {status === "error" && (
+            <div className="banner banner-error">
+              <span className="banner-icon">⚠</span>
+              <span>
+                Couldn't load storm data. <code>{errorMsg}</code>
+              </span>
+            </div>
+          )}
+
+          {status === "ok" && storms.length === 0 ? (
+            <div className="empty-state">
+              <CycloneMark />
+              <div className="empty-state-title">No active tropical cyclones</div>
+              <div className="empty-state-sub">
+                All monitored basins are currently quiet. This console refreshes
+                automatically every five minutes.
+              </div>
+            </div>
+          ) : (
+            <>
+              {selectedStorm && <StormHeader storm={selectedStorm} />}
+
+              <StormMap
+                storms={storms}
+                selectedStorm={selectedStorm}
+                onSelect={setSelectedId}
+              />
+
+              {selectedStorm && (
+                <StormDetail storm={selectedStorm} apiBase={API_BASE} />
+              )}
+            </>
           )}
         </main>
       </div>

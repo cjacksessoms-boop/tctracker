@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -12,21 +12,26 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
-import { classifyIntensity } from "../utils/intensity.js";
+import { classifyIntensity, INTENSITY_SCALE } from "../utils/intensity.js";
 
-// Leaflet's default marker icons reference image files in a way that
-// doesn't play nicely with Vite's bundler by default. This block fixes
-// that - it's boilerplate you'll see in most react-leaflet projects.
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+// Storm position markers are rendered as divIcons instead of Leaflet's
+// stock blue pin, so every marker is colored by its real Saffir-Simpson
+// category - the same encoding used in the sidebar and legend. The
+// selected storm additionally gets an animated locator ring.
+function stormIcon(color, selected) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="storm-marker ${selected ? "is-selected" : ""}" style="--cat-color:${color}">
+             <span class="storm-marker-ring"></span>
+             <span class="storm-marker-dot"></span>
+           </div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
 
-// Small helper component: whenever the selected storm changes, smoothly
-// pan/zoom the map to center on it. react-leaflet requires this "useMap"
-// pattern for imperative map control from inside the tree.
+// Smoothly pan/zoom to the selected storm. react-leaflet requires this
+// "useMap" pattern for imperative map control from inside the tree.
 function FlyToStorm({ storm }) {
   const map = useMap();
   useEffect(() => {
@@ -40,13 +45,12 @@ function FlyToStorm({ storm }) {
 // See App.jsx for the explanation of this env var.
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
-// A fixed palette so each model gets a distinct, readable color. We hash
-// the model's name to an index so the same model (e.g. "AVNO"/GFS) gets
-// the same color across renders, without needing to hardcode every
-// possible model name (new ensemble members etc. show up all the time).
+// A desaturated palette for model tracks. These are deliberately muted
+// relative to the Saffir-Simpson colors so guidance spaghetti never
+// competes visually with actual intensity encoding.
 const PALETTE = [
-  "#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#38d9a9",
-  "#4dabf7", "#748ffc", "#9775fa", "#da77f2", "#f783ac",
+  "#7aa2c9", "#c99a6e", "#8fbf8a", "#b58fc4", "#6fb3b8",
+  "#c48f8f", "#9aa7d1", "#bfae76", "#89bda6", "#c288a8",
 ];
 function colorForModel(tech) {
   let hash = 0;
@@ -55,8 +59,8 @@ function colorForModel(tech) {
 }
 
 // A handful of models worth labeling clearly in the legend - everything
-// else still draws, just grouped as "other models" in the legend to avoid
-// an unreadable wall of text (a-decks can contain 20-30+ techs/members).
+// else still draws, just under its raw ATCF tech code, to avoid an
+// unreadable wall of text (a-decks can contain 20-30+ techs/members).
 const KNOWN_MODELS = {
   OFCL: "NHC Official",
   AVNO: "GFS",
@@ -71,6 +75,17 @@ const KNOWN_MODELS = {
   CMC: "CMC (Canadian)",
 };
 
+// The official track is drawn heavier than guidance members so the
+// consensus forecast stays readable inside a dense spaghetti plot.
+function trackStyle(tech) {
+  const official = tech === "OFCL";
+  return {
+    color: official ? "#ffffff" : colorForModel(tech),
+    weight: official ? 3 : 1.6,
+    opacity: official ? 0.95 : 0.65,
+  };
+}
+
 export default function StormMap({ storms, selectedStorm, onSelect }) {
   const [coneGeoJson, setConeGeoJson] = useState(null);
   const [modelTracks, setModelTracks] = useState({}); // { TECH: [{lat,lon,tau}] }
@@ -78,6 +93,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
   const [showIntensity, setShowIntensity] = useState(true);
   const [selectedModel, setSelectedModel] = useState("ALL");
   const [spaghettiStatus, setSpaghettiStatus] = useState("idle"); // idle|loading|ok|error
+  const [legendOpen, setLegendOpen] = useState(true);
 
   // When the selected storm has a forecast-cone GeoJSON URL, fetch it
   // through our backend proxy (to dodge CORS) and draw it on the map.
@@ -129,166 +145,235 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
   // Sort dropdown options alphabetically by display label, but keep
   // "NHC Official" (OFCL) pinned near the top since it's the one people
   // usually want first.
-  const modelOptions = [...modelEntries]
-    .map(([tech]) => tech)
-    .sort((a, b) => {
-      if (a === "OFCL") return -1;
-      if (b === "OFCL") return 1;
-      return (KNOWN_MODELS[a] ?? a).localeCompare(KNOWN_MODELS[b] ?? b);
-    });
+  const modelOptions = useMemo(
+    () =>
+      [...modelEntries]
+        .map(([tech]) => tech)
+        .sort((a, b) => {
+          if (a === "OFCL") return -1;
+          if (b === "OFCL") return 1;
+          return (KNOWN_MODELS[a] ?? a).localeCompare(KNOWN_MODELS[b] ?? b);
+        }),
+    [modelTracks]
+  );
+
+  const showLegend = showSpaghetti && visibleModelEntries.length > 0;
 
   return (
-    <div className="map-wrapper">
-      {selectedStorm && (
-        <div className="map-toolbar">
-          <label className="spaghetti-toggle">
-            <input
-              type="checkbox"
-              checked={showSpaghetti}
-              onChange={(e) => setShowSpaghetti(e.target.checked)}
-            />
-            Show spaghetti models
-          </label>
-          <label className="spaghetti-toggle">
-            <input
-              type="checkbox"
-              checked={showIntensity}
-              onChange={(e) => setShowIntensity(e.target.checked)}
-            />
-            Show intensity at each point
-          </label>
-          {modelEntries.length > 0 && (
-            <label className="model-select-label">
-              Model:
-              <select
-                className="model-select"
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-              >
-                <option value="ALL">All models</option>
-                {modelOptions.map((tech) => (
-                  <option key={tech} value={tech}>
-                    {KNOWN_MODELS[tech] ?? tech}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {spaghettiStatus === "loading" && <span className="map-status">loading model tracks…</span>}
-          {spaghettiStatus === "error" && <span className="map-status map-status-error">couldn't load model tracks</span>}
+    <section className="panel map-panel">
+      <div className="panel-head">
+        <div className="panel-head-title">
+          <span className="eyebrow">Track Map</span>
         </div>
-      )}
 
-      <MapContainer
-        center={[20, -60]}
-        zoom={3}
-        style={{ height: "420px", width: "100%", borderRadius: "8px" }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
-
-        {storms.map((storm) =>
-          Number.isNaN(storm.lat) || Number.isNaN(storm.lon) ? null : (
-            <Marker
-              key={storm.id}
-              position={[storm.lat, storm.lon]}
-              eventHandlers={{ click: () => onSelect(storm.id) }}
-            >
-              <Popup>
-                <strong>{storm.name}</strong>
-                <br />
-                {storm.classification}
-                {storm.intensity ? ` — ${storm.intensity} kt` : ""}
-              </Popup>
-            </Marker>
-          )
-        )}
-
-        {coneGeoJson && <GeoJSON data={coneGeoJson} />}
-
-        {showSpaghetti && (
-          <LayerGroup key={`${selectedStorm?.id ?? "none"}-${selectedModel}`}>
-            {visibleModelEntries.map(([tech, points]) => {
-              const positions = points
-                .filter((p) => !Number.isNaN(p.lat) && !Number.isNaN(p.lon))
-                .map((p) => [p.lat, p.lon]);
-              if (positions.length < 2) return null;
-              return (
-                <Polyline
-                  key={tech}
-                  positions={positions}
-                  pathOptions={{ color: colorForModel(tech), weight: 2, opacity: 0.8 }}
+        <div className="toolbar toolbar-spacer">
+          {selectedStorm && (
+            <>
+              <label className="ctl-check">
+                <input
+                  type="checkbox"
+                  checked={showSpaghetti}
+                  onChange={(e) => setShowSpaghetti(e.target.checked)}
                 />
-              );
-            })}
+                Guidance tracks
+              </label>
+              <label className="ctl-check">
+                <input
+                  type="checkbox"
+                  checked={showIntensity}
+                  onChange={(e) => setShowIntensity(e.target.checked)}
+                />
+                Intensity points
+              </label>
 
-            {showIntensity &&
-              visibleModelEntries.flatMap(([tech, points]) =>
-                points
+              {modelEntries.length > 0 && (
+                <select
+                  className="ctl-select"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  aria-label="Filter guidance model"
+                >
+                  <option value="ALL">All models ({modelEntries.length})</option>
+                  {modelOptions.map((tech) => (
+                    <option key={tech} value={tech}>
+                      {KNOWN_MODELS[tech] ?? tech}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+        </div>
+
+        {spaghettiStatus === "loading" && (
+          <span className="status-text">
+            <span className="spinner" />
+            Loading guidance
+          </span>
+        )}
+        {spaghettiStatus === "error" && (
+          <span className="status-text is-error">Guidance unavailable</span>
+        )}
+      </div>
+
+      <div className="panel-body panel-body-flush">
+        <MapContainer center={[20, -60]} zoom={3} className="map-canvas" zoomControl={true}>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+
+          {/* Forecast cone drawn as a subtle white envelope - present but
+              never louder than the tracks and markers inside it. */}
+          {coneGeoJson && (
+            <GeoJSON
+              key={selectedStorm?.id}
+              data={coneGeoJson}
+              style={{
+                color: "#ffffff",
+                weight: 1,
+                opacity: 0.5,
+                fillColor: "#ffffff",
+                fillOpacity: 0.07,
+              }}
+            />
+          )}
+
+          {showSpaghetti && (
+            <LayerGroup key={`${selectedStorm?.id ?? "none"}-${selectedModel}`}>
+              {visibleModelEntries.map(([tech, points]) => {
+                const positions = points
                   .filter((p) => !Number.isNaN(p.lat) && !Number.isNaN(p.lon))
-                  .map((p) => {
-                    const { label, color } = classifyIntensity(p.vmax);
-                    return (
-                      <CircleMarker
-                        key={`${tech}-${p.tau}`}
-                        center={[p.lat, p.lon]}
-                        radius={5}
-                        pathOptions={{
-                          color: "#05070c", // dark outline so markers stand out
-                          weight: 1,
-                          fillColor: color,
-                          fillOpacity: 0.95,
-                        }}
-                      >
-                        <Tooltip direction="top" offset={[0, -4]}>
-                          <strong>{KNOWN_MODELS[tech] ?? tech}</strong> — {p.tau >= 0 ? `+${p.tau}h` : `${p.tau}h`}
-                          <br />
-                          {p.vmax != null ? `${p.vmax} kt` : "wind: n/a"} · {label}
-                        </Tooltip>
-                      </CircleMarker>
-                    );
-                  })
-              )}
-          </LayerGroup>
-        )}
+                  .map((p) => [p.lat, p.lon]);
+                if (positions.length < 2) return null;
+                return (
+                  <Polyline key={tech} positions={positions} pathOptions={trackStyle(tech)} />
+                );
+              })}
 
-        <FlyToStorm storm={selectedStorm} />
-      </MapContainer>
-
-      {showSpaghetti && visibleModelEntries.length > 0 && (
-        <div className="spaghetti-legend">
-          <div className="legend-row">
-            {visibleModelEntries.map(([tech]) => (
-              <span key={tech} className="legend-item">
-                <span
-                  className="legend-swatch legend-swatch-line"
-                  style={{ background: colorForModel(tech) }}
-                />
-                {KNOWN_MODELS[tech] ?? tech}
-              </span>
-            ))}
-          </div>
-
-          {showIntensity && (
-            <div className="legend-row legend-row-intensity">
-              {["Tropical Depression", "Tropical Storm", "Category 1", "Category 2", "Category 3", "Category 4", "Category 5"].map(
-                (label, i) => {
-                  const sample = [20, 50, 75, 90, 105, 125, 140][i];
-                  const { color } = classifyIntensity(sample);
-                  return (
-                    <span key={label} className="legend-item">
-                      <span className="legend-swatch legend-swatch-dot" style={{ background: color }} />
-                      {label}
-                    </span>
-                  );
-                }
-              )}
-            </div>
+              {showIntensity &&
+                visibleModelEntries.flatMap(([tech, points]) =>
+                  points
+                    .filter((p) => !Number.isNaN(p.lat) && !Number.isNaN(p.lon))
+                    .map((p) => {
+                      const { label, color } = classifyIntensity(p.vmax);
+                      return (
+                        <CircleMarker
+                          key={`${tech}-${p.tau}`}
+                          center={[p.lat, p.lon]}
+                          radius={tech === "OFCL" ? 5 : 3.5}
+                          pathOptions={{
+                            color: "#070a0f",
+                            weight: 1,
+                            fillColor: color,
+                            fillOpacity: 0.95,
+                          }}
+                        >
+                          <Tooltip direction="top" offset={[0, -4]}>
+                            <span className="map-tip-title">
+                              {KNOWN_MODELS[tech] ?? tech}
+                            </span>
+                            <br />
+                            <span className="map-tip-meta">
+                              {p.tau >= 0 ? `+${p.tau}h` : `${p.tau}h`} ·{" "}
+                              {p.vmax != null ? `${p.vmax} kt` : "wind n/a"} · {label}
+                            </span>
+                          </Tooltip>
+                        </CircleMarker>
+                      );
+                    })
+                )}
+            </LayerGroup>
           )}
-        </div>
-      )}
-    </div>
+
+          {/* Current storm positions drawn last so they always sit on top
+              of guidance tracks and the cone. */}
+          {storms.map((storm) =>
+            Number.isNaN(storm.lat) || Number.isNaN(storm.lon) ? null : (
+              <Marker
+                key={storm.id}
+                position={[storm.lat, storm.lon]}
+                icon={stormIcon(
+                  classifyIntensity(storm.intensity).color,
+                  storm.id === selectedStorm?.id
+                )}
+                zIndexOffset={storm.id === selectedStorm?.id ? 1000 : 0}
+                eventHandlers={{ click: () => onSelect(storm.id) }}
+              >
+                <Popup>
+                  <span className="map-popup-name">{storm.name}</span>
+                  <span className="map-popup-meta">
+                    {storm.classification}
+                    {storm.intensity ? ` · ${storm.intensity} kt` : ""}
+                    {storm.pressure ? ` · ${storm.pressure} mb` : ""}
+                  </span>
+                </Popup>
+              </Marker>
+            )
+          )}
+
+          <FlyToStorm storm={selectedStorm} />
+        </MapContainer>
+
+        {showLegend && (
+          <div className="map-legend">
+            <button
+              type="button"
+              className="map-legend-head"
+              onClick={() => setLegendOpen((v) => !v)}
+              aria-expanded={legendOpen}
+            >
+              <span>Legend</span>
+              <span>{legendOpen ? "−" : "+"}</span>
+            </button>
+
+            {legendOpen && (
+              <div className="map-legend-body">
+                {showIntensity && (
+                  <div className="legend-section">
+                    <div className="eyebrow legend-section-title">Saffir-Simpson Scale</div>
+                    <div className="cat-scale">
+                      {INTENSITY_SCALE.map((step) => (
+                        <span
+                          key={step.label}
+                          className="cat-scale-step"
+                          style={{ background: step.color }}
+                          title={step.label}
+                        />
+                      ))}
+                    </div>
+                    <div className="cat-scale-labels">
+                      {INTENSITY_SCALE.map((step) => (
+                        <span key={step.label}>{step.short}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="legend-section">
+                  <div className="eyebrow legend-section-title">
+                    Guidance ({visibleModelEntries.length})
+                  </div>
+                  <div className="legend-row">
+                    {visibleModelEntries.map(([tech]) => (
+                      <span key={tech} className="legend-item">
+                        <span
+                          className="legend-swatch-line"
+                          style={{
+                            background: trackStyle(tech).color,
+                            height: tech === "OFCL" ? 3 : 2.5,
+                          }}
+                        />
+                        {KNOWN_MODELS[tech] ?? tech}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

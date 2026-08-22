@@ -16,8 +16,8 @@ function KnackwxImage({ storm, suffix, label }) {
   useEffect(() => setStatus("loading"), [storm.id, suffix]);
 
   return (
-    <div className="spaghetti-image-block">
-      <h4 className="spaghetti-image-label">{label}</h4>
+    <div className="imagery-block">
+      <h4 className="eyebrow imagery-label">{label}</h4>
       {status === "error" && (
         <p className="placeholder-hint">Not available yet for this storm.</p>
       )}
@@ -25,7 +25,7 @@ function KnackwxImage({ storm, suffix, label }) {
         key={url}
         src={url}
         alt={`${label} for ${storm.name}`}
-        className="spaghetti-image"
+        className="static-image"
         style={{ display: status === "error" ? "none" : "block" }}
         onLoad={() => setStatus("ok")}
         onError={() => setStatus("error")}
@@ -36,7 +36,7 @@ function KnackwxImage({ storm, suffix, label }) {
 
 export default function SpaghettiImagePanel({ storm }) {
   return (
-    <div className="spaghetti-image-panel">
+    <div className="imagery-panel">
       <KnackwxImage storm={storm} suffix="tracks" label="Track guidance" />
       <KnackwxImage storm={storm} suffix="winds" label="Intensity guidance" />
     </div>

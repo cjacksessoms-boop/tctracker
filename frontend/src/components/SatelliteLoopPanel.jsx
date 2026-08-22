@@ -97,11 +97,21 @@ export default function SatelliteLoopPanel({ storm }) {
   }, [status, playing, frames.length]);
 
   if (status === "loading") {
-    return <p className="placeholder-hint">Finding available loop frames…</p>;
+    return (
+      <p className="placeholder-hint">
+        <span className="spinner" />
+        Finding available loop frames…
+      </p>
+    );
   }
 
   if (status === "preloading") {
-    return <p className="placeholder-hint">Loading and decoding loop frames…</p>;
+    return (
+      <p className="placeholder-hint">
+        <span className="spinner" />
+        Loading and decoding loop frames…
+      </p>
+    );
   }
 
   if (status === "error") {
@@ -131,23 +141,31 @@ export default function SatelliteLoopPanel({ storm }) {
   const aspectRatio = frames[0] ? `${frames[0].width} / ${frames[0].height}` : "1 / 1";
 
   return (
-    <div className="satellite-loop-panel">
-      <div className="loop-frame-stack" style={{ aspectRatio }}>
+    <div className="imagery-panel">
+      <div className="frame-stack" style={{ aspectRatio }}>
         {frames.map((f, i) => (
           <img
             key={f.url}
             src={f.url}
             alt={`Satellite loop frame for ${storm.name}`}
-            className="loop-frame"
+            className="frame-img"
             style={{ opacity: i === index ? 1 : 0 }}
             referrerPolicy="no-referrer"
           />
         ))}
       </div>
-      <div className="model-maps-frame-bar">
-        <button onClick={() => setPlaying((p) => !p)}>
-          {playing ? "⏸ Pause" : "▶ Play"}
+
+      <div className="playback-bar">
+        <button
+          className="ctl ctl-icon"
+          onClick={() => setPlaying((p) => !p)}
+          aria-label={playing ? "Pause loop" : "Play loop"}
+        >
+          {playing ? "❚❚" : "▶"}
         </button>
+        <span className="frame-counter">
+          {index + 1}/{frames.length}
+        </span>
         <input
           type="range"
           min={0}
@@ -157,10 +175,12 @@ export default function SatelliteLoopPanel({ storm }) {
             setPlaying(false);
             setIndex(Number(e.target.value));
           }}
-          className="loop-scrubber"
+          className="scrubber"
+          aria-label="Loop frame scrubber"
         />
-        <span>{hhmm}Z</span>
+        <span className="playback-time">{hhmm}Z</span>
       </div>
+
       {frames.length < listedCount && (
         <p className="placeholder-hint">
           {frames.length} of {listedCount} listed frames loaded successfully.

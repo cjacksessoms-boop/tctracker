@@ -163,26 +163,32 @@ export default function CyclonicWxModelViewer({ storm }) {
   }
 
   return (
-    <div className="model-maps-panel">
-      <div className="model-maps-controls">
-        <label>
-          Model:
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {MODEL_OPTIONS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
-        </label>
+    <div className="imagery-panel">
+      <div className="imagery-controls">
+        <span className="field-label">Model</span>
+        <select
+          className="ctl-select"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+        >
+          {MODEL_OPTIONS.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
       </div>
 
       {status === "searching" && (
         <p className="placeholder-hint">
-          Looking for the latest available {model.toUpperCase()} run for this storm…
+          <span className="spinner" />
+          Looking for the latest available {model.toUpperCase()} run…
         </p>
       )}
 
       {status === "preloading" && (
-        <p className="placeholder-hint">Loading forecast frames…</p>
+        <p className="placeholder-hint">
+          <span className="spinner" />
+          Loading forecast frames…
+        </p>
       )}
 
       {status === "notfound" && (
@@ -198,9 +204,9 @@ export default function CyclonicWxModelViewer({ storm }) {
       )}
 
       {status === "ready" && (
-        <div className="satellite-loop-panel">
+        <>
           <div
-            className="loop-frame-stack"
+            className="frame-stack"
             style={{ aspectRatio: `${frames[0].width} / ${frames[0].height}` }}
           >
             {frames.map((f, i) => (
@@ -208,16 +214,22 @@ export default function CyclonicWxModelViewer({ storm }) {
                 key={f.url}
                 src={f.url}
                 alt={`${model.toUpperCase()} run for ${storm.name}, +${f.frameHour}h`}
-                className="loop-frame"
+                className="frame-img"
                 style={{ opacity: i === index ? 1 : 0 }}
                 referrerPolicy="no-referrer"
               />
             ))}
           </div>
-          <div className="model-maps-frame-bar">
-            <button onClick={() => setPlaying((p) => !p)}>
-              {playing ? "⏸ Pause" : "▶ Play"}
+
+          <div className="playback-bar">
+            <button
+              className="ctl ctl-icon"
+              onClick={() => setPlaying((p) => !p)}
+              aria-label={playing ? "Pause loop" : "Play loop"}
+            >
+              {playing ? "❚❚" : "▶"}
             </button>
+            <span className="frame-counter">+{frames[index].frameHour}h</span>
             <input
               type="range"
               min={0}
@@ -227,19 +239,20 @@ export default function CyclonicWxModelViewer({ storm }) {
                 setPlaying(false);
                 setIndex(Number(e.target.value));
               }}
-              className="loop-scrubber"
+              className="scrubber"
+              aria-label="Forecast frame scrubber"
             />
-            <span>Init {cycleUsed}Z · +{frames[index].frameHour}h</span>
+            <span className="playback-time">Init {cycleUsed}Z</span>
             <a
               href={frames[index].url}
               target="_blank"
               rel="noreferrer"
-              className="open-new-tab-link"
+              className="ctl"
             >
-              ↗ Full size
+              Full size ↗
             </a>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -1,408 +1,1166 @@
 /* ============================================================================
-   DESIGN TOKENS
-   A storm-tracking console aesthetic: deep void backgrounds, a single
-   cyan-teal "scope" accent for interactive elements, and the Saffir-
-   Simpson category colors doing double duty as the app's real signature -
-   they're functional data encoding, reused consistently everywhere
-   (map dots, sidebar accent bars, legends) rather than decoration.
+   TROPICAL CYCLONE TRACKER - OPERATIONS CONSOLE
+   ----------------------------------------------------------------------------
+   Design intent: read like a professional forecast-desk product, not a
+   consumer weather app. That means:
+     - A neutral slate surface hierarchy. The UI chrome is deliberately
+       desaturated so the ONLY saturated colors on screen are the
+       Saffir-Simpson category colors, which carry real meaning.
+     - Strict typographic roles: mono + uppercase micro-caps for labels
+       and telemetry, sans for names and prose. Numbers are tabular so
+       columns of readings line up.
+     - Hairline 1px borders and flat surfaces instead of shadows/glows.
+     - One accent (signal blue) used only for interactive state.
    ============================================================================ */
-:root {
-  --void: #05070c;
-  --panel: #0b101c;
-  --panel-raised: #121a2c;
-  --line: #1e293f;
-  --line-bright: #2c3a58;
-  --ink: #eaeef7;
-  --ink-dim: #8793ab;
-  --ink-faint: #566078;
-  --scope: #37e6c4;
-  --scope-dim: rgba(55, 230, 196, 0.14);
-  --scope-ink: #04211c;
-  --danger: #ff6b6b;
-  --danger-dim: rgba(255, 107, 107, 0.12);
 
-  --font-display: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+:root {
+  /* Surfaces - a real elevation ladder, not two arbitrary greys */
+  --bg-base: #0a0e14;
+  --bg-sunken: #070a0f;
+  --bg-panel: #10151d;
+  --bg-raised: #171d27;
+  --bg-hover: #1c2330;
+
+  /* Hairlines */
+  --line: #1f2734;
+  --line-strong: #2b3545;
+
+  /* Text ramp */
+  --text: #e6ebf2;
+  --text-muted: #94a1b4;
+  --text-faint: #64707f;
+
+  /* Single interactive accent */
+  --accent: #4d9fff;
+  --accent-soft: rgba(77, 159, 255, 0.12);
+  --accent-line: rgba(77, 159, 255, 0.45);
+
+  /* Status */
+  --warn: #ffb020;
+  --danger: #ff5f56;
+  --danger-soft: rgba(255, 95, 86, 0.1);
+  --ok: #3ecf8e;
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+
+  --header-h: 56px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 * { box-sizing: border-box; }
 
+html, body, #root { height: 100%; }
+
 body {
   margin: 0;
-  font-family: var(--font-body);
-  background: var(--void);
-  color: var(--ink);
+  background: var(--bg-base);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-a { color: var(--scope); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
 
-.app-shell { max-width: 1200px; margin: 0 auto; padding: 28px 24px 60px; }
+button { font-family: inherit; }
 
-/* ---- Header: the one signature moment - a faint rotating radar sweep
-   behind the title, restrained and low-opacity. ---- */
-.app-header {
-  position: relative;
-  padding: 4px 0 22px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--line);
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Consistent, unobtrusive scrollbars - default Windows bars are heavy
+   enough to visually break the panel edges. */
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover { background: #3b4759; background-clip: content-box; }
+
+/* Reusable micro-caps label - the single typographic device that makes
+   the whole thing feel instrumented rather than decorative. */
+.eyebrow,
+.label-micro {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Tabular figures everywhere numbers are compared vertically. */
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ============================================================================
+   APP SHELL - full-viewport, fixed header, independently scrolling columns.
+   Replaces the old centered max-width page that wasted a dashboard's
+   most valuable resource: screen area.
+   ============================================================================ */
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
-.app-header::before {
-  content: "";
-  position: absolute;
-  top: -140px;
-  left: -60px;
-  width: 280px;
-  height: 280px;
-  border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent 0deg, var(--scope-dim) 18deg, transparent 40deg, transparent 360deg);
-  animation: sweep 6s linear infinite;
-  pointer-events: none;
-  z-index: 0;
-}
-@keyframes sweep { to { transform: rotate(360deg); } }
 
-.app-header h1 {
-  position: relative;
-  margin: 0 0 4px;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.65rem;
-  letter-spacing: -0.01em;
+.app-header {
+  flex: none;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line);
 }
-.subtitle {
-  position: relative;
+
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  align-self: center;
+  color: var(--accent);
+}
+.brand-mark svg { width: 22px; height: 22px; display: block; }
+.brand-title {
   margin: 0;
-  color: var(--ink-dim);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.brand-sub {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 10px;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 
-.banner {
-  padding: 12px 16px;
-  border-radius: 6px;
-  margin-bottom: 16px;
-  font-size: 0.85rem;
+.header-spacer { flex: 1; }
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.header-stat { display: flex; align-items: baseline; gap: 6px; }
+.header-stat-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Live/stale/offline indicator - a small dot + label, the standard way
+   operational dashboards show feed health. */
+.feed-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
   border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
-.banner-error { background: var(--danger-dim); border-color: rgba(255, 107, 107, 0.35); color: #ffb3b3; }
-.banner-info { background: var(--scope-dim); border-color: rgba(55, 230, 196, 0.3); color: #b6f3e8; }
+.feed-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: none;
+}
+.feed-status.is-live .feed-dot { background: var(--ok); animation: pulse 2.4s ease-in-out infinite; }
+.feed-status.is-live { border-color: rgba(62, 207, 142, 0.3); }
+.feed-status.is-loading .feed-dot { background: var(--warn); animation: pulse 1.1s ease-in-out infinite; }
+.feed-status.is-error .feed-dot { background: var(--danger); }
+.feed-status.is-error { border-color: rgba(255, 95, 86, 0.35); color: #ffb3ae; }
 
-.app-body { display: flex; gap: 20px; align-items: flex-start; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
 
-/* ---- Sidebar ---- */
+/* ---- Body: sidebar + workspace ---- */
+.app-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ============================================================================
+   SIDEBAR - active storm register
+   ============================================================================ */
 .sidebar {
-  width: 260px;
-  flex-shrink: 0;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 6px;
-  max-height: 700px;
-  overflow-y: auto;
+  width: 288px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--line);
 }
+
+.sidebar-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.sidebar-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; }
 
 .sidebar-message {
-  padding: 16px;
-  color: var(--ink-faint);
-  font-size: 0.85rem;
-  font-family: var(--font-mono);
+  padding: 20px 16px;
+  color: var(--text-faint);
+  font-size: 12.5px;
 }
+
+/* Skeleton rows while the first fetch is in flight - prevents the
+   layout from popping in and reads as "working", not "broken". */
+.skeleton-row {
+  height: 14px;
+  margin: 14px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-hover) 50%, var(--bg-raised) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.skeleton-row:nth-child(2n) { width: 60%; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* Basin grouping - sticky headers so you always know which basin the
+   row you're looking at belongs to while scrolling. */
+.basin-group { border-bottom: 1px solid var(--line); }
+.basin-group:last-child { border-bottom: none; }
+
+.basin-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+}
+.basin-head-count { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); }
 
 .storm-list { list-style: none; margin: 0; padding: 0; }
 
+/* Each row is a compact data record: category bar, name, ID, and a
+   right-aligned wind readout - scannable in a single pass. */
 .storm-list-item {
   position: relative;
-  padding: 10px 12px 10px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-bottom: 3px;
-  border-left: 3px solid var(--cat-color, var(--line));
-  transition: background 0.12s ease;
-}
-.storm-list-item:hover { background: var(--panel-raised); }
-.storm-list-item.selected { background: var(--panel-raised); box-shadow: inset 0 0 0 1px var(--line-bright); }
-.storm-list-name {
-  font-weight: 600;
-  font-size: 0.92rem;
-  letter-spacing: -0.005em;
-}
-.storm-list-meta {
-  font-size: 0.72rem;
-  color: var(--ink-dim);
-  font-family: var(--font-mono);
-  margin-top: 2px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.main-panel { flex: 1; min-width: 0; }
-
-/* ---- Map ---- */
-.map-wrapper { margin-bottom: 20px; }
-
-.map-toolbar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-bottom: 10px;
-  font-size: 0.78rem;
-  font-family: var(--font-mono);
+  gap: 10px;
+  width: 100%;
+  padding: 9px 14px 9px 13px;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
 }
-.spaghetti-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ink-dim); }
-.spaghetti-toggle input { accent-color: var(--scope); }
-.model-select-label { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); }
-.model-select {
-  background: var(--panel-raised);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 0.78rem;
-  font-family: var(--font-mono);
+.storm-list-item:hover { background: var(--bg-hover); }
+.storm-list-item.selected {
+  background: var(--bg-raised);
+  border-left-color: var(--cat-color, var(--accent));
 }
-.map-status { color: var(--ink-faint); }
-.map-status-error { color: var(--danger); }
+.storm-list-item.selected::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
 
-.spaghetti-legend {
+.storm-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--cat-color);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.storm-row-main { flex: 1; min-width: 0; }
+.storm-list-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.storm-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.storm-list-id { color: var(--text-faint); }
+.storm-list-sep { opacity: 0.4; }
+
+.storm-row-wind { text-align: right; flex: none; }
+.storm-row-kt {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text);
+}
+.storm-row-kt-unit { font-size: 9px; color: var(--text-faint); margin-left: 2px; font-weight: 400; }
+.storm-row-cat {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--cat-color);
+}
+
+/* ============================================================================
+   WORKSPACE - map on top, detail below, single scroll context
+   ============================================================================ */
+.workspace {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 12px 14px;
-  background: var(--panel);
+  gap: 16px;
+  background: var(--bg-base);
+}
+
+/* Generic panel primitive - every card in the app uses this so borders,
+   radii, and header treatment are identical everywhere. */
+.panel {
+  background: var(--bg-panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 0.74rem;
-  font-family: var(--font-mono);
+  border-radius: var(--r-lg);
+  overflow: hidden;
 }
-.legend-row { display: flex; flex-wrap: wrap; gap: 10px 16px; }
-.legend-row-intensity { border-top: 1px solid var(--line); padding-top: 8px; }
-.legend-item { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); }
-.legend-swatch-line { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
-.legend-swatch-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--void); }
-
-/* Leaflet map container itself - a dark frame so the CARTO dark tiles
-   sit inside a consistent border rather than looking like a stray box. */
-.leaflet-container { background: var(--void) !important; }
-
-/* ---- Storm detail panel ---- */
-.storm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px; }
-.storm-detail h2 {
-  margin: 0 0 16px;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.3rem;
-}
-
-.tab-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid var(--line);
-}
-.tab-button {
-  background: transparent;
-  color: var(--ink-dim);
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  transition: color 0.12s ease, border-color 0.12s ease;
-}
-.tab-button:hover { color: var(--ink); }
-.tab-button.active { color: var(--scope); border-bottom-color: var(--scope); }
-
-/* Overview stats as a console-style telemetry readout: mono values,
-   uppercase muted labels, hairline row dividers. */
-.storm-stats { width: 100%; border-collapse: collapse; }
-.storm-stats td {
-  padding: 9px 4px;
-  border-bottom: 1px solid var(--line);
-  font-size: 0.88rem;
-}
-.storm-stats td:first-child {
-  color: var(--ink-faint);
-  width: 40%;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.storm-stats td:last-child { font-family: var(--font-mono); }
-
-.placeholder-panel {
-  background: var(--panel-raised);
-  border: 1px dashed var(--line-bright);
-  border-radius: 8px;
-  padding: 18px 20px;
-  font-size: 0.88rem;
-  color: var(--ink-dim);
-}
-.placeholder-panel a { color: var(--scope); }
-.placeholder-hint { color: var(--ink-faint); font-size: 0.78rem; margin-top: 8px; font-family: var(--font-mono); }
-
-.advisory-link {
-  display: inline-block;
-  margin-top: 18px;
-  color: var(--scope);
-  font-size: 0.85rem;
-  text-decoration: none;
-}
-.advisory-link:hover { text-decoration: underline; }
-
-/* ---- Iframe embeds + fullscreen ---- */
-.nrlmry-panel { display: flex; flex-direction: column; gap: 10px; }
-.nrlmry-toolbar { display: flex; justify-content: flex-end; align-items: center; }
-.open-new-tab-link { color: var(--scope); font-size: 0.85rem; text-decoration: none; }
-.open-new-tab-link:hover { text-decoration: underline; }
-
-.fullscreen-toggle-btn {
-  background: transparent;
-  color: var(--ink-dim);
-  border: 1px solid var(--line-bright);
-  border-radius: 6px;
-  padding: 5px 12px;
-  cursor: pointer;
-  font-size: 0.76rem;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  transition: border-color 0.12s ease, color 0.12s ease;
-}
-.fullscreen-toggle-btn:hover { border-color: var(--scope); color: var(--scope); }
-
-.nrlmry-iframe-wrap { position: relative; }
-.nrlmry-iframe-wrap.fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: var(--void);
-  padding: 48px 12px 12px;
-}
-.nrlmry-iframe-wrap.fullscreen .nrlmry-iframe { height: 100%; }
-
-.fullscreen-close-btn {
-  position: fixed;
-  top: 10px;
-  right: 16px;
-  z-index: 1001;
-  background: var(--scope);
-  color: var(--scope-ink);
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-family: var(--font-mono);
-  font-weight: 600;
-}
-.fullscreen-close-btn:hover { filter: brightness(1.08); }
-
-.nrlmry-iframe {
-  width: 100%;
-  height: 600px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-raised);
-}
-
-/* ---- Model maps / fallback viewer ---- */
-.model-maps-panel { display: flex; flex-direction: column; gap: 12px; }
-.model-maps-controls { display: flex; gap: 16px; font-size: 0.78rem; font-family: var(--font-mono); }
-.model-maps-controls label { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); }
-.model-maps-controls select {
-  background: var(--panel-raised);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 0.78rem;
-  font-family: var(--font-mono);
-}
-.model-map-image {
-  width: 100%;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
-}
-.model-maps-frame-bar {
+.panel-head {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 0.8rem;
-  font-family: var(--font-mono);
-  color: var(--ink-dim);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-panel);
 }
-.model-maps-frame-bar button {
-  background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--line-bright);
-  border-radius: 6px;
-  padding: 6px 12px;
-  cursor: pointer;
-  font-size: 0.78rem;
+.panel-head-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.panel-body { padding: 14px; }
+.panel-body-flush { padding: 0; }
+
+.banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--bg-panel);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.banner code {
   font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  word-break: break-word;
+}
+.banner-error { background: var(--danger-soft); border-color: rgba(255, 95, 86, 0.3); color: #ffc3bf; }
+.banner-icon { flex: none; line-height: 1.35; }
+
+/* Empty state when there are genuinely no active storms - deliberately
+   calm and centered rather than an alarming red box. */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-faint);
+}
+.empty-state svg { width: 40px; height: 40px; opacity: 0.35; }
+.empty-state-title { font-size: 14px; font-weight: 600; color: var(--text-muted); }
+.empty-state-sub { font-size: 12.5px; max-width: 340px; }
+
+/* ============================================================================
+   CONTROLS - one consistent set of form/button primitives. Previously
+   buttons were styled ad hoc per component; now everything inherits from
+   these three classes.
+   ============================================================================ */
+.ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.ctl:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); border-color: #3b4759; }
+.ctl:disabled { opacity: 0.35; cursor: not-allowed; }
+.ctl-active,
+.ctl.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.ctl-icon { padding: 0 8px; }
+
+.ctl-select {
+  height: 28px;
+  padding: 0 26px 0 9px;
+  background-color: var(--bg-raised);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a1b4' d='M6 8.2 2.4 4.6l.9-.9L6 6.4l2.7-2.7.9.9z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  appearance: none;
+  cursor: pointer;
+  max-width: 190px;
+}
+.ctl-select:hover { border-color: #3b4759; }
+
+/* Checkbox styled as a labelled toggle chip so the toolbar reads as a
+   row of equal-weight controls instead of raw browser checkboxes. */
+.ctl-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
   transition: border-color 0.12s ease, color 0.12s ease;
 }
-.model-maps-frame-bar button:hover:not(:disabled) { border-color: var(--scope); color: var(--scope); }
-.model-maps-frame-bar button:disabled { opacity: 0.35; cursor: default; }
+.ctl-check:hover { color: var(--text); border-color: var(--line-strong); }
+.ctl-check input { accent-color: var(--accent); width: 13px; height: 13px; margin: 0; cursor: pointer; }
+.ctl-check:has(input:checked) { color: var(--text); border-color: var(--line-strong); }
 
-.models-tab { display: flex; flex-direction: column; gap: 12px; }
-.models-mode-toggle { display: flex; gap: 6px; }
-
-/* ---- Spaghetti guidance images ---- */
-.spaghetti-image-panel { display: flex; flex-direction: column; gap: 18px; }
-.spaghetti-image-block { display: flex; flex-direction: column; gap: 6px; }
-.spaghetti-image-label {
-  margin: 0;
-  font-size: 0.76rem;
-  color: var(--ink-dim);
-  font-weight: 600;
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.spaghetti-image {
-  width: 100%;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
+  color: var(--text-faint);
 }
 
-.satellite-loop-panel { display: flex; flex-direction: column; gap: 10px; }
-.loop-frame-stack {
-  position: relative;
-  width: 100%;
-  border-radius: 8px;
+/* Segmented control - used for the sub-mode switch inside Model Runs. */
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-sunken);
   border: 1px solid var(--line);
-  background: var(--panel-raised);
+  border-radius: var(--r-md);
+}
+.segmented .ctl {
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: var(--r-sm);
+}
+.segmented .ctl:hover:not(.active) { background: var(--bg-hover); }
+.segmented .ctl.active { background: var(--bg-raised); color: var(--text); border: none; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.toolbar-spacer { flex: 1; min-width: 0; }
+
+.status-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.status-text.is-error { color: #ff8b84; }
+
+/* Small inline spinner for "loading model tracks" style messages. */
+.spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================================
+   STORM HEADER CARD - the "current conditions" strip above the map.
+   This is new: previously the selected storm's vitals were buried in a
+   table inside a tab. Key readings now sit permanently at eye level,
+   which is how real forecast desks lay this out.
+   ============================================================================ */
+.storm-header {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  border-left: 3px solid var(--cat-color, var(--line-strong));
   overflow: hidden;
 }
-.loop-frame {
+
+.storm-header-id {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 18px;
+  min-width: 0;
+  flex: 1;
+}
+.storm-header-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.storm-header-name h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+.storm-header-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.cat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cat-color);
+  background: color-mix(in srgb, var(--cat-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cat-color) 40%, transparent);
+  white-space: nowrap;
+}
+.major-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--warn);
+  background: rgba(255, 176, 32, 0.1);
+  border: 1px solid rgba(255, 176, 32, 0.35);
+}
+
+/* Vitals row: wind / pressure / movement / position as equal columns
+   with hairline dividers - a telemetry strip, not a table. */
+.vitals {
+  display: flex;
+  flex: none;
+  border-left: 1px solid var(--line);
+}
+.vital {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 14px 18px;
+  border-right: 1px solid var(--line);
+  min-width: 108px;
+}
+.vital:last-child { border-right: none; }
+.vital-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text);
+  white-space: nowrap;
+}
+.vital-value .unit { font-size: 10.5px; font-weight: 400; color: var(--text-faint); margin-left: 3px; }
+.vital-value.is-empty { color: var(--text-faint); }
+
+/* ============================================================================
+   MAP
+   ============================================================================ */
+.map-panel .panel-body-flush { position: relative; }
+
+.map-canvas {
+  height: clamp(340px, 46vh, 560px);
+  width: 100%;
+  background: var(--bg-sunken);
+}
+
+.leaflet-container {
+  background: var(--bg-sunken) !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Leaflet's default control chrome is bright white and instantly makes
+   a dark dashboard look unfinished - restyled to match the panel system. */
+.leaflet-bar,
+.leaflet-control-zoom {
+  border: 1px solid var(--line-strong) !important;
+  border-radius: var(--r-md) !important;
+  overflow: hidden;
+  box-shadow: none !important;
+}
+.leaflet-bar a,
+.leaflet-control-zoom a {
+  background: var(--bg-panel) !important;
+  color: var(--text-muted) !important;
+  border-bottom: 1px solid var(--line) !important;
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  font-size: 15px !important;
+}
+.leaflet-bar a:last-child { border-bottom: none !important; }
+.leaflet-bar a:hover { background: var(--bg-hover) !important; color: var(--text) !important; }
+
+.leaflet-control-attribution {
+  background: rgba(10, 14, 20, 0.82) !important;
+  color: var(--text-faint) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 9.5px !important;
+  padding: 2px 6px !important;
+  border-top-left-radius: var(--r-sm);
+}
+.leaflet-control-attribution a { color: var(--text-muted) !important; }
+
+/* Popups + tooltips as small dark data cards. */
+.leaflet-popup-content-wrapper,
+.leaflet-tooltip {
+  background: var(--bg-raised) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: var(--r-md) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 12px !important;
+}
+.leaflet-popup-content { margin: 10px 12px !important; line-height: 1.45 !important; }
+.leaflet-popup-tip { background: var(--bg-raised) !important; border: 1px solid var(--line-strong) !important; }
+.leaflet-popup-close-button { color: var(--text-faint) !important; }
+.leaflet-tooltip { padding: 6px 9px !important; }
+.leaflet-tooltip::before { border-top-color: var(--line-strong) !important; }
+
+.map-popup-name { font-weight: 600; font-size: 13px; display: block; margin-bottom: 3px; }
+.map-popup-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.map-tip-title { font-weight: 600; font-size: 11.5px; }
+.map-tip-meta {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* Storm position marker, drawn as a divIcon so it matches the category
+   palette instead of Leaflet's stock blue pin. */
+.storm-marker { position: relative; }
+.storm-marker-dot {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cat-color);
+  border: 2px solid var(--bg-sunken);
+}
+.storm-marker-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--cat-color);
+  opacity: 0.5;
+}
+.storm-marker.is-selected .storm-marker-ring { animation: ping 2s ease-out infinite; }
+@keyframes ping {
+  0% { transform: scale(0.55); opacity: 0.75; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+/* Legend docked into the map's bottom-left corner rather than pushing
+   layout below the map. */
+.map-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 500;
+  max-width: min(52%, 460px);
+  background: rgba(16, 21, 29, 0.93);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+.map-legend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.map-legend-head:hover { color: var(--text-muted); }
+.map-legend-body {
+  padding: 0 10px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+.legend-section + .legend-section { border-top: 1px solid var(--line); padding-top: 7px; }
+.legend-section-title { margin-bottom: 5px; }
+.legend-row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.legend-swatch-line { display: inline-block; width: 13px; height: 2.5px; border-radius: 2px; flex: none; }
+.legend-swatch-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  flex: none;
+}
+
+/* Category scale as a continuous gradient bar - a compact, standard way
+   to show the Saffir-Simpson ramp without seven separate legend rows. */
+.cat-scale { display: flex; width: 100%; border-radius: 3px; overflow: hidden; }
+.cat-scale-step {
+  flex: 1;
+  height: 6px;
+  position: relative;
+}
+.cat-scale-labels {
+  display: flex;
+  margin-top: 3px;
+}
+.cat-scale-labels span {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+/* ============================================================================
+   DETAIL PANEL + TABS
+   ============================================================================ */
+.storm-detail { display: flex; flex-direction: column; }
+
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-panel);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+
+.tab-button {
+  position: relative;
+  flex: none;
+  background: none;
+  border: none;
+  padding: 11px 13px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s ease;
+}
+.tab-button::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  background: transparent;
+  border-radius: 2px 2px 0 0;
+  transition: background 0.12s ease;
+}
+.tab-button:hover { color: var(--text-muted); }
+.tab-button.active { color: var(--text); }
+.tab-button.active::after { background: var(--accent); }
+
+.tab-content { padding: 16px; min-height: 180px; }
+.tab-content-flush { padding: 0; }
+
+/* ---- Overview: definition grid instead of a bordered table. Reads as
+   a spec sheet, aligns cleanly, and reflows on narrow screens. ---- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  background: var(--bg-panel);
+}
+.stat-cell-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: var(--text);
+  word-break: break-word;
+}
+.stat-cell-value.is-empty { color: var(--text-faint); }
+
+.detail-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-sunken);
+}
+
+/* ---- Shared content states ---- */
+.placeholder-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.placeholder-panel p { margin: 0; }
+.placeholder-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+/* ---- Embedded external dashboards ---- */
+.embed-panel { display: flex; flex-direction: column; gap: 10px; }
+.embed-toolbar { display: flex; align-items: center; gap: 8px; }
+.embed-frame-wrap {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--bg-sunken);
+}
+.embed-frame { width: 100%; height: 620px; border: none; display: block; background: var(--bg-sunken); }
+
+.embed-frame-wrap.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  border: none;
+  border-radius: 0;
+  background: var(--bg-base);
+  padding: var(--header-h) 0 0;
+}
+.embed-frame-wrap.fullscreen .embed-frame { height: 100%; }
+
+.fullscreen-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4001;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line);
+}
+.fullscreen-bar-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--bg-raised);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+
+/* ---- Imagery panels (model maps, spaghetti stills, satellite loop) ---- */
+.imagery-panel { display: flex; flex-direction: column; gap: 12px; }
+.imagery-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.frame-stack {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+.frame-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  /* No transition here on purpose - a fade would blur fast-moving
-     satellite motion between frames. This is an instant swap, just
-     handled as a cheap compositor opacity flip instead of a decode. */
+  /* Intentionally no transition: a fade would smear fast satellite
+     motion between frames. Opacity flips are a cheap compositor swap. */
 }
-.loop-scrubber {
+
+.static-image {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-sunken);
+}
+
+/* Playback bar - play/pause, scrubber, and a mono timestamp readout. */
+.playback-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.scrubber {
   flex: 1;
-  accent-color: var(--scope);
+  min-width: 0;
+  height: 4px;
+  appearance: none;
+  background: var(--line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.scrubber::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-panel);
+  cursor: pointer;
+}
+.scrubber::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--bg-panel);
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+.playback-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  min-width: 56px;
+  text-align: right;
+}
+.frame-counter {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  min-width: 52px;
+}
+
+.imagery-block { display: flex; flex-direction: column; gap: 7px; }
+.imagery-block + .imagery-block { border-top: 1px solid var(--line); padding-top: 14px; }
+.imagery-label { margin: 0; }
+
+/* ============================================================================
+   RESPONSIVE - collapse to a stacked layout on narrow viewports.
+   ============================================================================ */
+@media (max-width: 1080px) {
+  .vitals { flex-wrap: wrap; }
+  .vital { min-width: 96px; padding: 10px 14px; }
+}
+
+@media (max-width: 860px) {
+  .app-body { flex-direction: column; overflow-y: auto; }
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    max-height: 260px;
+  }
+  .workspace { overflow: visible; padding: 12px; }
+  .storm-header { flex-direction: column; }
+  .vitals { border-left: none; border-top: 1px solid var(--line); }
+  .vital { flex: 1; }
+  .map-legend { position: static; max-width: none; margin: 10px; }
+  .header-meta { gap: 10px; }
+  .brand-sub { display: none; }
 }

@@ -20,23 +20,28 @@ export default function IframeEmbedPanel({ url, title }) {
   }, [isFullscreen]);
 
   return (
-    <div className="nrlmry-panel">
-      <div className="nrlmry-toolbar">
-        <button
-          className="fullscreen-toggle-btn"
-          onClick={() => setIsFullscreen((v) => !v)}
-        >
-          {isFullscreen ? "✕ Close fullscreen" : "⛶ Fullscreen"}
+    <div className="embed-panel">
+      <div className="embed-toolbar">
+        <span className="field-label">External source</span>
+        <div className="toolbar-spacer" />
+        <a className="ctl" href={url} target="_blank" rel="noreferrer">
+          Open in new tab ↗
+        </a>
+        <button className="ctl" onClick={() => setIsFullscreen(true)}>
+          Fullscreen
         </button>
       </div>
 
-      <div className={`nrlmry-iframe-wrap ${isFullscreen ? "fullscreen" : ""}`}>
+      <div className={`embed-frame-wrap ${isFullscreen ? "fullscreen" : ""}`}>
         {isFullscreen && (
-          <button className="fullscreen-close-btn" onClick={() => setIsFullscreen(false)}>
-            ✕ Close
-          </button>
+          <div className="fullscreen-bar">
+            <span className="fullscreen-bar-title">{title}</span>
+            <button className="ctl" onClick={() => setIsFullscreen(false)}>
+              Exit <span className="kbd">Esc</span>
+            </button>
+          </div>
         )}
-        <iframe key={url} src={url} title={title} className="nrlmry-iframe" />
+        <iframe key={url} src={url} title={title} className="embed-frame" />
       </div>
     </div>
   );
