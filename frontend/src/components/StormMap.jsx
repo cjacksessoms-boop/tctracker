@@ -147,7 +147,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
               checked={showSpaghetti}
               onChange={(e) => setShowSpaghetti(e.target.checked)}
             />
-            Spaghetti
+            Show spaghetti models
           </label>
           <label className="spaghetti-toggle">
             <input
@@ -155,13 +155,13 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
               checked={showIntensity}
               onChange={(e) => setShowIntensity(e.target.checked)}
             />
-            Intensity dots
+            Show intensity at each point
           </label>
           {modelEntries.length > 0 && (
-            <div className="field-box">
-              <span className="field-box-label">Model</span>
+            <label className="model-select-label">
+              Model:
               <select
-                className="field-box-select"
+                className="model-select"
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
               >
@@ -172,7 +172,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
                   </option>
                 ))}
               </select>
-            </div>
+            </label>
           )}
           {spaghettiStatus === "loading" && <span className="map-status">loading model tracks…</span>}
           {spaghettiStatus === "error" && <span className="map-status map-status-error">couldn't load model tracks</span>}
