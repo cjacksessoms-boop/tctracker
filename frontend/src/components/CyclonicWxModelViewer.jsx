@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { getJtwcCode } from "../utils/atcf.js";
-import LoopCanvas from "./LoopCanvas.jsx";
 
 // ----------------------------------------------------------------------------
 // CyclonicWX's per-storm model maps follow this pattern (confirmed from a
@@ -59,15 +58,15 @@ function buildUrl(model, cycle, stormCode, frameHour, product) {
 }
 
 // Same technique as the IR loop: fully decode each image before playback
-// starts, so autoplay never has to decode mid-loop, and hand back the
-// real Image object itself so LoopCanvas can draw directly from it.
+// starts, so swapping between them during autoplay is a cheap opacity
+// flip rather than a decode-triggered stutter.
 function preloadFrame(url, frameHour) {
   const img = new Image();
   img.referrerPolicy = "no-referrer";
   img.src = url;
   return img
     .decode()
-    .then(() => ({ url, frameHour, img }))
+    .then(() => ({ url, frameHour, width: img.naturalWidth, height: img.naturalHeight }))
     .catch(() => Promise.reject(url));
 }
 
@@ -166,18 +165,14 @@ export default function CyclonicWxModelViewer({ storm }) {
   return (
     <div className="model-maps-panel">
       <div className="model-maps-controls">
-        <div className="field-box">
-          <span className="field-box-label">Model</span>
-          <select className="field-box-select" value={model} onChange={(e) => setModel(e.target.value)}>
+        <label>
+          Model:
+          <select value={model} onChange={(e) => setModel(e.target.value)}>
             {MODEL_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>{m.label}</option>
             ))}
           </select>
-        </div>
-        <div className="field-box">
-          <span className="field-box-label">Storm</span>
-          <span className="field-box-value">{storm.name} ({stormCode})</span>
-        </div>
+        </label>
       </div>
 
       {status === "searching" && (
@@ -204,18 +199,23 @@ export default function CyclonicWxModelViewer({ storm }) {
 
       {status === "ready" && (
         <div className="satellite-loop-panel">
-          <div className="loop-canvas-wrap">
-            <LoopCanvas
-              images={frames.map((f) => f.img)}
-              index={index}
-              className="loop-canvas"
-            />
-            <span className="loop-timestamp-badge">
-              F{String(frames[index].frameHour).padStart(3, "0")} · Init {cycleUsed}Z
-            </span>
+          <div
+            className="loop-frame-stack"
+            style={{ aspectRatio: `${frames[0].width} / ${frames[0].height}` }}
+          >
+            {frames.map((f, i) => (
+              <img
+                key={f.url}
+                src={f.url}
+                alt={`${model.toUpperCase()} run for ${storm.name}, +${f.frameHour}h`}
+                className="loop-frame"
+                style={{ opacity: i === index ? 1 : 0 }}
+                referrerPolicy="no-referrer"
+              />
+            ))}
           </div>
           <div className="model-maps-frame-bar">
-            <button className="play-btn" onClick={() => setPlaying((p) => !p)}>
+            <button onClick={() => setPlaying((p) => !p)}>
               {playing ? "⏸ Pause" : "▶ Play"}
             </button>
             <input
@@ -229,6 +229,7 @@ export default function CyclonicWxModelViewer({ storm }) {
               }}
               className="loop-scrubber"
             />
+            <span>Init {cycleUsed}Z · +{frames[index].frameHour}h</span>
             <a
               href={frames[index].url}
               target="_blank"
