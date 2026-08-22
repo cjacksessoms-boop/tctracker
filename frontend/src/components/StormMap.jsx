@@ -147,7 +147,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
               checked={showSpaghetti}
               onChange={(e) => setShowSpaghetti(e.target.checked)}
             />
-            Show spaghetti models
+            Spaghetti
           </label>
           <label className="spaghetti-toggle">
             <input
@@ -155,7 +155,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
               checked={showIntensity}
               onChange={(e) => setShowIntensity(e.target.checked)}
             />
-            Show intensity at each point
+            Intensity dots
           </label>
           {modelEntries.length > 0 && (
             <label className="model-select-label">

@@ -41,14 +41,14 @@ body {
 
 a { color: var(--scope); }
 
-.app-shell { max-width: 1200px; margin: 0 auto; padding: 28px 24px 60px; }
+.app-shell { max-width: 1200px; margin: 0 auto; padding: 20px 20px 48px; }
 
 /* ---- Header: the one signature moment - a faint rotating radar sweep
    behind the title, restrained and low-opacity. ---- */
 .app-header {
   position: relative;
-  padding: 4px 0 22px;
-  margin-bottom: 20px;
+  padding: 2px 0 16px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--line);
   overflow: hidden;
 }
@@ -195,19 +195,19 @@ a { color: var(--scope); }
 .leaflet-container { background: var(--void) !important; }
 
 /* ---- Storm detail panel ---- */
-.storm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px; }
+.storm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
 .storm-detail h2 {
-  margin: 0 0 16px;
+  margin: 0 0 12px;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 1.3rem;
+  font-size: 1.25rem;
 }
 
 .tab-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 18px;
+  gap: 2px;
+  margin-bottom: 14px;
   border-bottom: 1px solid var(--line);
 }
 .tab-button {
@@ -215,7 +215,7 @@ a { color: var(--scope); }
   color: var(--ink-dim);
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 8px 12px;
+  padding: 7px 10px;
   cursor: pointer;
   font-size: 0.82rem;
   font-family: var(--font-mono);
@@ -362,7 +362,6 @@ a { color: var(--scope); }
 .model-maps-frame-bar button:disabled { opacity: 0.35; cursor: default; }
 
 .models-tab { display: flex; flex-direction: column; gap: 12px; }
-.models-mode-toggle { display: flex; gap: 6px; }
 
 /* ---- Spaghetti guidance images ---- */
 .spaghetti-image-panel { display: flex; flex-direction: column; gap: 18px; }
@@ -384,23 +383,13 @@ a { color: var(--scope); }
 }
 
 .satellite-loop-panel { display: flex; flex-direction: column; gap: 10px; }
-.loop-frame-stack {
-  position: relative;
+.loop-canvas {
   width: 100%;
+  height: auto;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel-raised);
-  overflow: hidden;
-}
-.loop-frame {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  /* No transition here on purpose - a fade would blur fast-moving
-     satellite motion between frames. This is an instant swap, just
-     handled as a cheap compositor opacity flip instead of a decode. */
+  display: block;
 }
 .loop-scrubber {
   flex: 1;

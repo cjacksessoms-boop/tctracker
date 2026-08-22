@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getJtwcCode } from "../utils/atcf.js";
+import LoopCanvas from "./LoopCanvas.jsx";
 
 // ----------------------------------------------------------------------------
 // CyclonicWX's per-storm model maps follow this pattern (confirmed from a
@@ -58,15 +59,15 @@ function buildUrl(model, cycle, stormCode, frameHour, product) {
 }
 
 // Same technique as the IR loop: fully decode each image before playback
-// starts, so swapping between them during autoplay is a cheap opacity
-// flip rather than a decode-triggered stutter.
+// starts, so autoplay never has to decode mid-loop, and hand back the
+// real Image object itself so LoopCanvas can draw directly from it.
 function preloadFrame(url, frameHour) {
   const img = new Image();
   img.referrerPolicy = "no-referrer";
   img.src = url;
   return img
     .decode()
-    .then(() => ({ url, frameHour, width: img.naturalWidth, height: img.naturalHeight }))
+    .then(() => ({ url, frameHour, img }))
     .catch(() => Promise.reject(url));
 }
 
@@ -199,21 +200,11 @@ export default function CyclonicWxModelViewer({ storm }) {
 
       {status === "ready" && (
         <div className="satellite-loop-panel">
-          <div
-            className="loop-frame-stack"
-            style={{ aspectRatio: `${frames[0].width} / ${frames[0].height}` }}
-          >
-            {frames.map((f, i) => (
-              <img
-                key={f.url}
-                src={f.url}
-                alt={`${model.toUpperCase()} run for ${storm.name}, +${f.frameHour}h`}
-                className="loop-frame"
-                style={{ opacity: i === index ? 1 : 0 }}
-                referrerPolicy="no-referrer"
-              />
-            ))}
-          </div>
+          <LoopCanvas
+            images={frames.map((f) => f.img)}
+            index={index}
+            className="loop-canvas"
+          />
           <div className="model-maps-frame-bar">
             <button onClick={() => setPlaying((p) => !p)}>
               {playing ? "⏸ Pause" : "▶ Play"}

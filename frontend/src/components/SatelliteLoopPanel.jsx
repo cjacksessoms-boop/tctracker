@@ -1,30 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { getJtwcCode } from "../utils/atcf.js";
+import LoopCanvas from "./LoopCanvas.jsx";
 
 // See App.jsx for the explanation of this env var.
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
-// A fixed, fast frame rate. We initially made this adaptive to real time
-// gaps between frames, but real data turned out to be evenly spaced
-// (confirmed via the backend's actual listing) - the unevenness you saw
-// earlier was your machine lagging, not the data. So a simple constant
-// pace is both simpler and, at this speed, actually smoother-looking
-// than the variable-duration version.
 const PLAYBACK_MS = 80;
 
-// Loading an image getting cached (onload) is NOT the same as it being
-// fully decoded and ready to paint instantly. Swapping <img src> during
-// playback can still cause a decode-triggered stutter the first time
-// each frame is actually displayed, even if it's sitting in cache.
-// img.decode() forces that decode work to happen now, during the loading
-// screen, instead of during playback.
+// img.decode() forces the browser to fully decode the image now, during
+// the loading screen, instead of the first time it's actually drawn -
+// which is what used to cause a stutter on a frame's first appearance
+// even when it was already cached. We keep the real Image object itself
+// (not just its URL) so LoopCanvas can draw directly from it later.
 function preloadImage(frame) {
   const img = new Image();
   img.referrerPolicy = "no-referrer"; // some servers block hotlinked Referer headers
   img.src = frame.url;
   return img
     .decode()
-    .then(() => ({ ...frame, width: img.naturalWidth, height: img.naturalHeight }))
+    .then(() => ({ ...frame, img }))
     .catch(() => Promise.reject(frame));
 }
 
@@ -34,7 +28,7 @@ export default function SatelliteLoopPanel({ storm }) {
   const [listedCount, setListedCount] = useState(0);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
-  const timeoutRef = useRef(null);
+  const timerRef = useRef(null);
 
   const stormCode = getJtwcCode(storm);
 
@@ -85,25 +79,20 @@ export default function SatelliteLoopPanel({ storm }) {
     };
   }, [stormCode]);
 
-  // Autoplay loop, fixed pace - the crossfade rendering (see below) is
-  // what actually makes this look smooth; timing just needs to be
-  // consistent, not adaptive.
   useEffect(() => {
     if (status !== "ok" || !playing || frames.length < 2) return;
-    timeoutRef.current = setInterval(() => {
+    timerRef.current = setInterval(() => {
       setIndex((i) => (i + 1) % frames.length);
     }, PLAYBACK_MS);
-    return () => clearInterval(timeoutRef.current);
+    return () => clearInterval(timerRef.current);
   }, [status, playing, frames.length]);
 
   if (status === "loading") {
     return <p className="placeholder-hint">Finding available loop frames…</p>;
   }
-
   if (status === "preloading") {
     return <p className="placeholder-hint">Loading and decoding loop frames…</p>;
   }
-
   if (status === "error") {
     return (
       <div className="placeholder-panel">
@@ -111,7 +100,6 @@ export default function SatelliteLoopPanel({ storm }) {
       </div>
     );
   }
-
   if (status === "empty") {
     return (
       <div className="placeholder-panel">
@@ -122,28 +110,10 @@ export default function SatelliteLoopPanel({ storm }) {
 
   const currentFrame = frames[index];
   const hhmm = `${currentFrame.timestamp.slice(8, 10)}:${currentFrame.timestamp.slice(10, 12)}`;
-  // Use the first frame's real dimensions to lock the container's aspect
-  // ratio, so stacking every frame absolutely inside it never causes
-  // layout shifts - only opacity changes, which the GPU compositor
-  // handles without any repaint/decode work. This is the actual fix for
-  // per-frame stutter: every frame is already painted once, we're just
-  // toggling which layer is visible.
-  const aspectRatio = frames[0] ? `${frames[0].width} / ${frames[0].height}` : "1 / 1";
 
   return (
     <div className="satellite-loop-panel">
-      <div className="loop-frame-stack" style={{ aspectRatio }}>
-        {frames.map((f, i) => (
-          <img
-            key={f.url}
-            src={f.url}
-            alt={`Satellite loop frame for ${storm.name}`}
-            className="loop-frame"
-            style={{ opacity: i === index ? 1 : 0 }}
-            referrerPolicy="no-referrer"
-          />
-        ))}
-      </div>
+      <LoopCanvas images={frames.map((f) => f.img)} index={index} className="loop-canvas" />
       <div className="model-maps-frame-bar">
         <button onClick={() => setPlaying((p) => !p)}>
           {playing ? "⏸ Pause" : "▶ Play"}

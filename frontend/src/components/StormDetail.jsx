@@ -1,8 +1,5 @@
 import { useState } from "react";
-import ModelMapsPanel from "./ModelMapsPanel.jsx";
-import CyclonicWxPanel from "./CyclonicWxPanel.jsx";
 import CyclonicWxModelViewer from "./CyclonicWxModelViewer.jsx";
-import WeatherfrontPanel from "./WeatherfrontPanel.jsx";
 import IframeEmbedPanel from "./IframeEmbedPanel.jsx";
 import AdtPanel from "./AdtPanel.jsx";
 import SpaghettiImagePanel from "./SpaghettiImagePanel.jsx";
@@ -10,24 +7,22 @@ import SatelliteLoopPanel from "./SatelliteLoopPanel.jsx";
 
 const TABS = [
   { id: "overview", label: "Overview" },
-  { id: "nrlmry", label: "Satellite & Microwave" },
+  { id: "nrlmry", label: "Satellite" },
   { id: "irloop", label: "IR Loop" },
-  { id: "spaghetti", label: "Spaghetti Models" },
-  { id: "adt", label: "ADT Estimates" },
-  { id: "models", label: "Model Runs" },
+  { id: "spaghetti", label: "Spaghetti" },
+  { id: "adt", label: "ADT" },
+  { id: "models", label: "Models" },
 ];
 
 // NRLMRY's GeoIPS TC dashboard uses the EXACT same storm ID format NHC
 // gives us (e.g. "ep062026"), so we can build this URL automatically for
-// any storm, present or future - no manual updates ever needed. This is
-// the one confirmed to actually allow iframe embedding.
+// any storm, present or future - no manual updates ever needed.
 function nrlmryUrl(storm) {
   return `https://science.nrlmry.navy.mil/geoips/tcweb4/storm/${storm.id}`;
 }
 
 export default function StormDetail({ storm }) {
   const [tab, setTab] = useState("overview");
-  const [modelsMode, setModelsMode] = useState("weatherfront"); // weatherfront | cyclonicwx-viewer | fallback | cyclonicwx-embed
 
   return (
     <div className="storm-detail">
@@ -68,54 +63,11 @@ export default function StormDetail({ storm }) {
 
         {tab === "irloop" && <SatelliteLoopPanel storm={storm} />}
 
-        {tab === "spaghetti" && (
-          <div className="models-tab">
-            <div className="placeholder-panel">
-              <p>
-                Model tracks for NHC-covered storms are also plotted
-                directly on the map above, with an intensity legend.
-              </p>
-            </div>
-            <SpaghettiImagePanel storm={storm} />
-          </div>
-        )}
+        {tab === "spaghetti" && <SpaghettiImagePanel storm={storm} />}
 
         {tab === "adt" && <AdtPanel storm={storm} />}
 
-        {tab === "models" && (
-          <div className="models-tab">
-            <div className="models-mode-toggle">
-              <button
-                className={`tab-button ${modelsMode === "weatherfront" ? "active" : ""}`}
-                onClick={() => setModelsMode("weatherfront")}
-              >
-                Weatherfront
-              </button>
-              <button
-                className={`tab-button ${modelsMode === "cyclonicwx-viewer" ? "active" : ""}`}
-                onClick={() => setModelsMode("cyclonicwx-viewer")}
-              >
-                CyclonicWX Models
-              </button>
-              <button
-                className={`tab-button ${modelsMode === "cyclonicwx-embed" ? "active" : ""}`}
-                onClick={() => setModelsMode("cyclonicwx-embed")}
-              >
-                CyclonicWX (site)
-              </button>
-              <button
-                className={`tab-button ${modelsMode === "fallback" ? "active" : ""}`}
-                onClick={() => setModelsMode("fallback")}
-              >
-                GFS Viewer
-              </button>
-            </div>
-            {modelsMode === "weatherfront" && <WeatherfrontPanel />}
-            {modelsMode === "cyclonicwx-viewer" && <CyclonicWxModelViewer storm={storm} />}
-            {modelsMode === "cyclonicwx-embed" && <CyclonicWxPanel />}
-            {modelsMode === "fallback" && <ModelMapsPanel storm={storm} />}
-          </div>
-        )}
+        {tab === "models" && <CyclonicWxModelViewer storm={storm} />}
       </div>
 
       {storm.publicAdvisoryUrl && (

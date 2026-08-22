@@ -30,6 +30,15 @@ function titleCase(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
+function displayName(raw) {
+  // Invests haven't been given a real name yet - "Invest" alone doesn't
+  // tell you WHICH one if several are active, so show its code too.
+  if (raw.storm_name?.toUpperCase() === "INVEST") {
+    return `Invest ${raw.atcf_id}`;
+  }
+  return titleCase(raw.storm_name);
+}
+
 function normalizeKnackwxStorm(raw) {
   return {
     // long_atcf_id matches NHC's own storm ID format exactly when NHC
@@ -37,7 +46,7 @@ function normalizeKnackwxStorm(raw) {
     // ID handling across every basin, including ones NHC doesn't cover.
     id: raw.long_atcf_id ?? raw.atcf_id,
     jtwcCode: raw.atcf_id, // e.g. "06E", "12W" - already the exact format our embed panels need
-    name: titleCase(raw.storm_name),
+    name: displayName(raw),
     classification: CYCLONE_NATURE_LABELS[raw.cyclone_nature] ?? raw.cyclone_nature ?? "",
     intensity: raw.winds ?? null,
     pressure: raw.pressure ?? null,
