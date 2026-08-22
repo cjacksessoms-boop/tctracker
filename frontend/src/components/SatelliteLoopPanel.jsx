@@ -28,7 +28,19 @@ function preloadImage(frame) {
     .catch(() => Promise.reject(frame));
 }
 
+// Confirmed real Dapiya product folders, in the order they should appear
+// in the selector. EVIS only has frames during daylight - that's a real
+// limitation of the source data, not a bug, so its "empty" state gets a
+// specific note rather than the generic one.
+const PRODUCT_OPTIONS = [
+  { value: "OTT", label: "Infrared (IR)" },
+  { value: "EVIS", label: "Enhanced Visible" },
+  { value: "VIS", label: "Visible" },
+  { value: "AWV", label: "Water Vapor" },
+];
+
 export default function SatelliteLoopPanel({ storm }) {
+  const [product, setProduct] = useState(PRODUCT_OPTIONS[0].value);
   const [status, setStatus] = useState("loading"); // loading | preloading | ok | empty | error
   const [frames, setFrames] = useState([]);
   const [listedCount, setListedCount] = useState(0);
@@ -49,7 +61,7 @@ export default function SatelliteLoopPanel({ storm }) {
 
     let cancelled = false;
 
-    fetch(`${API_BASE}/api/storm/${stormCode}/ir-frames`)
+    fetch(`${API_BASE}/api/storm/${stormCode}/ir-frames?product=${product}`)
       .then((res) => {
         if (!res.ok) throw new Error(`Backend returned ${res.status}`);
         return res.json();
@@ -83,7 +95,7 @@ export default function SatelliteLoopPanel({ storm }) {
     return () => {
       cancelled = true;
     };
-  }, [stormCode]);
+  }, [stormCode, product]);
 
   // Autoplay loop, fixed pace - the crossfade rendering (see below) is
   // what actually makes this look smooth; timing just needs to be
@@ -96,36 +108,70 @@ export default function SatelliteLoopPanel({ storm }) {
     return () => clearInterval(timeoutRef.current);
   }, [status, playing, frames.length]);
 
+  const productSelector = (
+    <div className="imagery-controls">
+      <span className="field-label">Product</span>
+      <select
+        className="ctl-select"
+        value={product}
+        onChange={(e) => {
+          setPlaying(true);
+          setProduct(e.target.value);
+        }}
+      >
+        {PRODUCT_OPTIONS.map((p) => (
+          <option key={p.value} value={p.value}>{p.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+
   if (status === "loading") {
     return (
-      <p className="placeholder-hint">
-        <span className="spinner" />
-        Finding available loop frames…
-      </p>
+      <div className="imagery-panel">
+        {productSelector}
+        <p className="placeholder-hint">
+          <span className="spinner" />
+          Finding available loop frames…
+        </p>
+      </div>
     );
   }
 
   if (status === "preloading") {
     return (
-      <p className="placeholder-hint">
-        <span className="spinner" />
-        Loading and decoding loop frames…
-      </p>
+      <div className="imagery-panel">
+        {productSelector}
+        <p className="placeholder-hint">
+          <span className="spinner" />
+          Loading and decoding loop frames…
+        </p>
+      </div>
     );
   }
 
   if (status === "error") {
     return (
-      <div className="placeholder-panel">
-        <p>Couldn't reach the frame listing for this storm.</p>
+      <div className="imagery-panel">
+        {productSelector}
+        <div className="placeholder-panel">
+          <p>Couldn't reach the frame listing for this storm.</p>
+        </div>
       </div>
     );
   }
 
   if (status === "empty") {
     return (
-      <div className="placeholder-panel">
-        <p>No loop frames available yet for this storm.</p>
+      <div className="imagery-panel">
+        {productSelector}
+        <div className="placeholder-panel">
+          <p>
+            {product === "EVIS"
+              ? "No enhanced visible frames right now - this product only has data during daylight hours for this storm's location."
+              : "No loop frames available yet for this storm."}
+          </p>
+        </div>
       </div>
     );
   }
@@ -142,6 +188,7 @@ export default function SatelliteLoopPanel({ storm }) {
 
   return (
     <div className="imagery-panel">
+      {productSelector}
       <div className="frame-stack" style={{ aspectRatio }}>
         {frames.map((f, i) => (
           <img

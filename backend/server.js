@@ -204,17 +204,22 @@ app.get("/api/proxy", async (req, res) => {
 });
 
 // ----------------------------------------------------------------------------
-// Dapiya's IR satellite loop imagery is served as individual timestamped
-// files, not one animated file (confirmed via your browser's Network
-// tab). We initially tried GUESSING which timestamps exist based on a
-// fixed interval, but real data proved that wrong - different
-// storms/basins capture at different intervals (Dolphin: every 150s,
-// Genevieve: every ~60s), and even a single storm's sequence has gaps
-// (missed frames). So instead, we fetch Dapiya's real directory listing
-// page and parse out the actual filenames that exist - authoritative,
-// not guessed.
-function parseDapiyaListing(html, stormCode) {
-  const pattern = new RegExp(`href="(${stormCode}_OTT_(\\d{14})\\.png)"`, "g");
+// Dapiya's satellite loop imagery is served as individual timestamped
+// files per product, not one animated file (confirmed via your browser's
+// Network tab). We initially tried GUESSING which timestamps exist based
+// on a fixed interval, but real data proved that wrong - different
+// storms/basins capture at different intervals, and even a single
+// storm's sequence has gaps (missed frames). So instead, we fetch
+// Dapiya's real directory listing page and parse out the actual
+// filenames that exist - authoritative, not guessed.
+//
+// This works for any product folder Dapiya offers - confirmed so far:
+//   OTT  - infrared (the original one we built this against)
+//   EVIS - enhanced visible (day only)
+//   VIS  - visible (day and night)
+//   AWV  - water vapor
+function parseDapiyaListing(html, stormCode, product) {
+  const pattern = new RegExp(`href="(${stormCode}_${product}_(\\d{14})\\.png)"`, "g");
   const frames = [];
   let match;
   while ((match = pattern.exec(html)) !== null) {
@@ -226,7 +231,8 @@ function parseDapiyaListing(html, stormCode) {
 
 app.get("/api/storm/:stormCode/ir-frames", async (req, res) => {
   const { stormCode } = req.params; // e.g. "12W", "07E"
-  const listingUrl = `https://data.dapiya.top/history/${stormCode}/OTT/`;
+  const product = (req.query.product || "OTT").toUpperCase(); // OTT | EVIS | VIS | AWV
+  const listingUrl = `https://data.dapiya.top/history/${stormCode}/${product}/`;
 
   try {
     const upstream = await fetch(listingUrl, {
@@ -236,18 +242,18 @@ app.get("/api/storm/:stormCode/ir-frames", async (req, res) => {
       throw new Error(`Listing request failed: ${upstream.status}`);
     }
     const html = await upstream.text();
-    const allFrames = parseDapiyaListing(html, stormCode);
+    const allFrames = parseDapiyaListing(html, stormCode, product);
 
     const RECENT_FRAME_COUNT = 30;
     const recent = allFrames.slice(-RECENT_FRAME_COUNT).map((f) => ({
       ...f,
-      url: `https://data.dapiya.top/history/${stormCode}/OTT/${f.filename}`,
+      url: `https://data.dapiya.top/history/${stormCode}/${product}/${f.filename}`,
     }));
 
     res.json({ frames: recent });
   } catch (err) {
     console.error(err);
-    res.status(502).json({ error: "Failed to fetch IR frame listing", detail: err.message });
+    res.status(502).json({ error: "Failed to fetch frame listing", detail: err.message });
   }
 });
 

@@ -10,7 +10,7 @@ import { classifyIntensity } from "../utils/intensity.js";
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "nrlmry", label: "Satellite" },
-  { id: "irloop", label: "IR Loop" },
+  { id: "irloop", label: "High Res Satellite Loops" },
   { id: "spaghetti", label: "Guidance" },
   { id: "adt", label: "ADT" },
   { id: "models", label: "Model Runs" },
