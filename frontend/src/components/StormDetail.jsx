@@ -1,8 +1,5 @@
 import { useState } from "react";
-import ModelMapsPanel from "./ModelMapsPanel.jsx";
-import CyclonicWxPanel from "./CyclonicWxPanel.jsx";
 import CyclonicWxModelViewer from "./CyclonicWxModelViewer.jsx";
-import WeatherfrontPanel from "./WeatherfrontPanel.jsx";
 import IframeEmbedPanel from "./IframeEmbedPanel.jsx";
 import AdtPanel from "./AdtPanel.jsx";
 import SpaghettiImagePanel from "./SpaghettiImagePanel.jsx";
@@ -17,13 +14,6 @@ const TABS = [
   { id: "spaghetti", label: "Guidance" },
   { id: "adt", label: "ADT" },
   { id: "models", label: "Model Runs" },
-];
-
-const MODEL_MODES = [
-  { id: "weatherfront", label: "Weatherfront" },
-  { id: "cyclonicwx-viewer", label: "CyclonicWX" },
-  { id: "cyclonicwx-embed", label: "CWX Site" },
-  { id: "fallback", label: "GFS Viewer" },
 ];
 
 // NRLMRY's GeoIPS TC dashboard uses the EXACT same storm ID format NHC
@@ -51,7 +41,6 @@ function Stat({ label, value }) {
 
 export default function StormDetail({ storm }) {
   const [tab, setTab] = useState("overview");
-  const [modelsMode, setModelsMode] = useState("weatherfront");
 
   const basin = basinInfo(basinCode(storm));
   const { label: category } = classifyIntensity(storm.intensity);
@@ -130,29 +119,7 @@ export default function StormDetail({ storm }) {
 
         {tab === "adt" && <AdtPanel storm={storm} />}
 
-        {tab === "models" && (
-          <div className="imagery-panel">
-            <div className="imagery-controls">
-              <span className="field-label">Source</span>
-              <div className="segmented">
-                {MODEL_MODES.map((m) => (
-                  <button
-                    key={m.id}
-                    className={`ctl ${modelsMode === m.id ? "active" : ""}`}
-                    onClick={() => setModelsMode(m.id)}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {modelsMode === "weatherfront" && <WeatherfrontPanel />}
-            {modelsMode === "cyclonicwx-viewer" && <CyclonicWxModelViewer storm={storm} />}
-            {modelsMode === "cyclonicwx-embed" && <CyclonicWxPanel />}
-            {modelsMode === "fallback" && <ModelMapsPanel storm={storm} />}
-          </div>
-        )}
+        {tab === "models" && <CyclonicWxModelViewer storm={storm} />}
       </div>
 
       {(storm.publicAdvisoryUrl || storm.forecastAdvisoryUrl) && (
