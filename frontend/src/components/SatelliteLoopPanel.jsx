@@ -113,9 +113,12 @@ export default function SatelliteLoopPanel({ storm }) {
 
   return (
     <div className="satellite-loop-panel">
-      <LoopCanvas images={frames.map((f) => f.img)} index={index} className="loop-canvas" />
+      <div className="loop-canvas-wrap">
+        <LoopCanvas images={frames.map((f) => f.img)} index={index} className="loop-canvas" />
+        <span className="loop-timestamp-badge">{hhmm}Z</span>
+      </div>
       <div className="model-maps-frame-bar">
-        <button onClick={() => setPlaying((p) => !p)}>
+        <button className="play-btn" onClick={() => setPlaying((p) => !p)}>
           {playing ? "⏸ Pause" : "▶ Play"}
         </button>
         <input
@@ -129,7 +132,6 @@ export default function SatelliteLoopPanel({ storm }) {
           }}
           className="loop-scrubber"
         />
-        <span>{hhmm}Z</span>
       </div>
       {frames.length < listedCount && (
         <p className="placeholder-hint">

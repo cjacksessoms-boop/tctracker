@@ -1,23 +1,25 @@
 /* ============================================================================
    DESIGN TOKENS
-   A storm-tracking console aesthetic: deep void backgrounds, a single
-   cyan-teal "scope" accent for interactive elements, and the Saffir-
-   Simpson category colors doing double duty as the app's real signature -
-   they're functional data encoding, reused consistently everywhere
-   (map dots, sidebar accent bars, legends) rather than decoration.
+   A storm-tracking console aesthetic: deep void backgrounds, a sky-blue
+   "scope" accent for interactive elements (matching the reference tool
+   UI this was styled after), and the Saffir-Simpson category colors
+   doing double duty as the app's real signature - they're functional
+   data encoding, reused consistently everywhere (map dots, sidebar
+   accent bars, legends) rather than decoration.
    ============================================================================ */
 :root {
   --void: #05070c;
   --panel: #0b101c;
   --panel-raised: #121a2c;
+  --panel-pill: #171f30;
   --line: #1e293f;
   --line-bright: #2c3a58;
   --ink: #eaeef7;
   --ink-dim: #8793ab;
   --ink-faint: #566078;
-  --scope: #37e6c4;
-  --scope-dim: rgba(55, 230, 196, 0.14);
-  --scope-ink: #04211c;
+  --scope: #3b9eff;
+  --scope-dim: rgba(59, 158, 255, 0.14);
+  --scope-ink: #ffffff;
   --danger: #ff6b6b;
   --danger-dim: rgba(255, 107, 107, 0.12);
 
@@ -37,6 +39,16 @@ body {
   font-family: var(--font-body);
   background: var(--void);
   color: var(--ink);
+}
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--scope), transparent 70%);
+  z-index: 2000;
 }
 
 a { color: var(--scope); }
@@ -159,16 +171,44 @@ a { color: var(--scope); }
 }
 .spaghetti-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ink-dim); }
 .spaghetti-toggle input { accent-color: var(--scope); }
-.model-select-label { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); }
-.model-select {
+
+/* Labeled field box - a small uppercase label above a bordered value/
+   select, matching the reference UI's "MODEL / STORM / INIT TIME" style
+   fields rather than a plain inline dropdown. */
+.field-box {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   background: var(--panel-raised);
-  color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 0.78rem;
-  font-family: var(--font-mono);
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 140px;
 }
+.field-box-label {
+  font-size: 0.65rem;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.field-box-select {
+  background: transparent;
+  color: var(--ink);
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.field-box-select:focus { outline: none; }
+.field-box-value {
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .map-status { color: var(--ink-faint); }
 .map-status-error { color: var(--danger); }
 
@@ -204,27 +244,31 @@ a { color: var(--scope); }
 }
 
 .tab-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
 }
 .tab-button {
-  background: transparent;
+  background: var(--panel-pill);
   color: var(--ink-dim);
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 10px;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-family: var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  transition: color 0.12s ease, border-color 0.12s ease;
+  font-weight: 600;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
-.tab-button:hover { color: var(--ink); }
-.tab-button.active { color: var(--scope); border-bottom-color: var(--scope); }
+.tab-button:hover { border-color: var(--line-bright); color: var(--ink); }
+.tab-button.active {
+  background: var(--scope);
+  color: var(--scope-ink);
+  border-color: var(--scope);
+}
 
 /* Overview stats as a console-style telemetry readout: mono values,
    uppercase muted labels, hairline row dividers. */
@@ -322,17 +366,7 @@ a { color: var(--scope); }
 
 /* ---- Model maps / fallback viewer ---- */
 .model-maps-panel { display: flex; flex-direction: column; gap: 12px; }
-.model-maps-controls { display: flex; gap: 16px; font-size: 0.78rem; font-family: var(--font-mono); }
-.model-maps-controls label { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); }
-.model-maps-controls select {
-  background: var(--panel-raised);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 0.78rem;
-  font-family: var(--font-mono);
-}
+.model-maps-controls { display: flex; gap: 10px; flex-wrap: wrap; }
 .model-map-image {
   width: 100%;
   border-radius: 8px;
@@ -342,24 +376,54 @@ a { color: var(--scope); }
 .model-maps-frame-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
   font-size: 0.8rem;
   font-family: var(--font-mono);
   color: var(--ink-dim);
 }
 .model-maps-frame-bar button {
-  background: transparent;
+  background: var(--panel-pill);
   color: var(--ink);
-  border: 1px solid var(--line-bright);
-  border-radius: 6px;
-  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 16px;
   cursor: pointer;
   font-size: 0.78rem;
   font-family: var(--font-mono);
-  transition: border-color 0.12s ease, color 0.12s ease;
+  font-weight: 600;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 .model-maps-frame-bar button:hover:not(:disabled) { border-color: var(--scope); color: var(--scope); }
 .model-maps-frame-bar button:disabled { opacity: 0.35; cursor: default; }
+
+/* Play/pause gets the filled accent treatment - it's the primary action
+   in the bar, same as the reference UI's filled play button. */
+.model-maps-frame-bar button.play-btn {
+  background: var(--scope);
+  color: var(--scope-ink);
+  border-color: var(--scope);
+}
+.model-maps-frame-bar button.play-btn:hover { filter: brightness(1.08); }
+
+/* Timestamp overlay badge - a dark rounded pill sitting on top of the
+   loop image, matching the reference UI's "F003 · Fri 08/21 5:00 PM"
+   badge in the top-left corner of the map. */
+.loop-canvas-wrap { position: relative; }
+.loop-timestamp-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(5, 7, 12, 0.82);
+  color: var(--ink);
+  border: 1px solid var(--line-bright);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
 
 .models-tab { display: flex; flex-direction: column; gap: 12px; }
 

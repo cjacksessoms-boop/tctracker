@@ -158,10 +158,10 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
             Intensity dots
           </label>
           {modelEntries.length > 0 && (
-            <label className="model-select-label">
-              Model:
+            <div className="field-box">
+              <span className="field-box-label">Model</span>
               <select
-                className="model-select"
+                className="field-box-select"
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
               >
@@ -172,7 +172,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
           )}
           {spaghettiStatus === "loading" && <span className="map-status">loading model tracks…</span>}
           {spaghettiStatus === "error" && <span className="map-status map-status-error">couldn't load model tracks</span>}

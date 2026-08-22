@@ -166,14 +166,18 @@ export default function CyclonicWxModelViewer({ storm }) {
   return (
     <div className="model-maps-panel">
       <div className="model-maps-controls">
-        <label>
-          Model:
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
+        <div className="field-box">
+          <span className="field-box-label">Model</span>
+          <select className="field-box-select" value={model} onChange={(e) => setModel(e.target.value)}>
             {MODEL_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>{m.label}</option>
             ))}
           </select>
-        </label>
+        </div>
+        <div className="field-box">
+          <span className="field-box-label">Storm</span>
+          <span className="field-box-value">{storm.name} ({stormCode})</span>
+        </div>
       </div>
 
       {status === "searching" && (
@@ -200,13 +204,18 @@ export default function CyclonicWxModelViewer({ storm }) {
 
       {status === "ready" && (
         <div className="satellite-loop-panel">
-          <LoopCanvas
-            images={frames.map((f) => f.img)}
-            index={index}
-            className="loop-canvas"
-          />
+          <div className="loop-canvas-wrap">
+            <LoopCanvas
+              images={frames.map((f) => f.img)}
+              index={index}
+              className="loop-canvas"
+            />
+            <span className="loop-timestamp-badge">
+              F{String(frames[index].frameHour).padStart(3, "0")} · Init {cycleUsed}Z
+            </span>
+          </div>
           <div className="model-maps-frame-bar">
-            <button onClick={() => setPlaying((p) => !p)}>
+            <button className="play-btn" onClick={() => setPlaying((p) => !p)}>
               {playing ? "⏸ Pause" : "▶ Play"}
             </button>
             <input
@@ -220,7 +229,6 @@ export default function CyclonicWxModelViewer({ storm }) {
               }}
               className="loop-scrubber"
             />
-            <span>Init {cycleUsed}Z · +{frames[index].frameHour}h</span>
             <a
               href={frames[index].url}
               target="_blank"
