@@ -1175,3 +1175,51 @@ button { font-family: inherit; }
   .header-meta { gap: 10px; }
   .brand-sub { display: none; }
 }
+
+/* ---- Forecast Creator ---- */
+.forecast-creator { display: flex; flex-direction: column; gap: 14px; }
+.creator-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px 16px;
+}
+.creator-toolbar-info p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-dim);
+  max-width: 46ch;
+}
+.creator-toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.creator-points-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px 16px;
+}
+.creator-point-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.creator-point-hour {
+  min-width: 44px;
+  color: var(--ink-dim);
+}
+.creator-point-wind {
+  min-width: 130px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.view-toggle { display: flex; gap: 6px; margin: 0 16px; }

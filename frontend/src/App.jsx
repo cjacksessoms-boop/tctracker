@@ -3,6 +3,7 @@ import StormList from "./components/StormList.jsx";
 import StormMap from "./components/StormMap.jsx";
 import StormDetail from "./components/StormDetail.jsx";
 import StormHeader from "./components/StormHeader.jsx";
+import ForecastCreator from "./components/ForecastCreator.jsx";
 import { fetchKnackwxStorms } from "./utils/knackwx.js";
 import { isMajor } from "./utils/intensity.js";
 
@@ -85,6 +86,7 @@ export default function App() {
   const [status, setStatus] = useState("loading"); // loading | ok | error
   const [errorMsg, setErrorMsg] = useState("");
   const [lastSync, setLastSync] = useState(null);
+  const [view, setView] = useState("tracker"); // tracker | creator
   const now = useUtcClock();
 
   useEffect(() => {
@@ -167,6 +169,21 @@ export default function App() {
 
         <div className="header-spacer" />
 
+        <div className="view-toggle">
+          <button
+            className={`ctl ${view === "tracker" ? "active" : ""}`}
+            onClick={() => setView("tracker")}
+          >
+            Live Tracker
+          </button>
+          <button
+            className={`ctl ${view === "creator" ? "active" : ""}`}
+            onClick={() => setView("creator")}
+          >
+            Forecast Creator
+          </button>
+        </div>
+
         <div className="header-meta">
           <div className="header-stat">
             <span className="label-micro">Active</span>
@@ -188,46 +205,54 @@ export default function App() {
       </header>
 
       <div className="app-body">
-        <aside className="sidebar">
-          <StormList
-            storms={storms}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            loading={status === "loading"}
-          />
-        </aside>
+        {view === "tracker" && (
+          <aside className="sidebar">
+            <StormList
+              storms={storms}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              loading={status === "loading"}
+            />
+          </aside>
+        )}
 
         <main className="workspace">
-          {status === "error" && (
-            <div className="banner banner-error">
-              <span className="banner-icon">⚠</span>
-              <span>
-                Couldn't load storm data. <code>{errorMsg}</code>
-              </span>
-            </div>
-          )}
-
-          {status === "ok" && storms.length === 0 ? (
-            <div className="empty-state">
-              <CycloneMark />
-              <div className="empty-state-title">No active tropical cyclones</div>
-              <div className="empty-state-sub">
-                All monitored basins are currently quiet. This console refreshes
-                automatically every five minutes.
-              </div>
-            </div>
+          {view === "creator" ? (
+            <ForecastCreator seedStorm={selectedStorm} />
           ) : (
             <>
-              {selectedStorm && <StormHeader storm={selectedStorm} />}
+              {status === "error" && (
+                <div className="banner banner-error">
+                  <span className="banner-icon">⚠</span>
+                  <span>
+                    Couldn't load storm data. <code>{errorMsg}</code>
+                  </span>
+                </div>
+              )}
 
-              <StormMap
-                storms={storms}
-                selectedStorm={selectedStorm}
-                onSelect={setSelectedId}
-              />
+              {status === "ok" && storms.length === 0 ? (
+                <div className="empty-state">
+                  <CycloneMark />
+                  <div className="empty-state-title">No active tropical cyclones</div>
+                  <div className="empty-state-sub">
+                    All monitored basins are currently quiet. This console refreshes
+                    automatically every five minutes.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {selectedStorm && <StormHeader storm={selectedStorm} />}
 
-              {selectedStorm && (
-                <StormDetail storm={selectedStorm} apiBase={API_BASE} />
+                  <StormMap
+                    storms={storms}
+                    selectedStorm={selectedStorm}
+                    onSelect={setSelectedId}
+                  />
+
+                  {selectedStorm && (
+                    <StormDetail storm={selectedStorm} apiBase={API_BASE} />
+                  )}
+                </>
               )}
             </>
           )}
