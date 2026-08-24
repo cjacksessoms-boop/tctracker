@@ -75,8 +75,12 @@ function buildCone(points) {
     const nx = -dy / len;
     const ny = dx / len;
 
+    // Tuned so the cone reaches roughly NHC's real full-size scale by
+    // about 120 hours (5 days) out - matching how far their actual
+    // forecast cone extends, rather than needing 200+ hours to look
+    // "normal sized."
     const steps = p.hour / HOUR_STEP;
-    const radiusDeg = 0.015 + Math.pow(steps, 1.3) * 0.035;
+    const radiusDeg = 0.03 + Math.pow(steps, 1.5) * 0.11;
 
     left.push([p.lat + ny * radiusDeg, p.lon + nx * radiusDeg]);
     right.push([p.lat - ny * radiusDeg, p.lon - nx * radiusDeg]);
