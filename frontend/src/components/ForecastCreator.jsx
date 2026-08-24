@@ -16,6 +16,20 @@ import { classifyIntensity, INTENSITY_SCALE } from "../utils/intensity.js";
 const HOUR_STEP = 12;
 const DEFAULT_WIND_KT = 50;
 
+// Classifications that aren't purely wind-speed-based - "Invest" is a
+// pre-designation status, "Extratropical" is a structural/thermal
+// classification, not an intensity tier - so these are explicit
+// per-point overrides rather than something classifyIntensity() could
+// ever derive from a wind number alone.
+const SPECIAL_CLASSIFICATIONS = {
+  INVEST: { label: "Invest", short: "INVEST", color: "#94a3b8" },
+  EXTRATROPICAL: { label: "Extratropical", short: "EX", color: "#a78bfa" },
+};
+
+function pointClassification(p) {
+  return p.override ? SPECIAL_CLASSIFICATIONS[p.override] : classifyIntensity(p.wind);
+}
+
 function MapClickHandler({ onClick }) {
   useMapEvents({
     click(e) {
@@ -32,6 +46,11 @@ function MapClickHandler({ onClick }) {
 // (which is based on historical forecast error, not a fixed formula) -
 // so it's meant for exploring "what if" scenarios, not as a real
 // forecast product.
+//
+// The radius starts SMALL and grows non-linearly (rather than starting
+// already-wide and growing slowly) - that near-zero start is what
+// actually makes this read as a flaring cone instead of a rectangle
+// with only a couple of points on the track.
 function buildCone(points) {
   if (points.length < 2) return null;
 
@@ -56,10 +75,8 @@ function buildCone(points) {
     const nx = -dy / len;
     const ny = dx / len;
 
-    // Radius grows with forecast hour, roughly matching how NHC's real
-    // cone widens further out in time (though the real growth rate is
-    // basin/era-specific, not a simple linear formula like this).
-    const radiusDeg = 0.08 + (p.hour / 12) * 0.045;
+    const steps = p.hour / HOUR_STEP;
+    const radiusDeg = 0.015 + Math.pow(steps, 1.3) * 0.035;
 
     left.push([p.lat + ny * radiusDeg, p.lon + nx * radiusDeg]);
     right.push([p.lat - ny * radiusDeg, p.lon - nx * radiusDeg]);
@@ -73,11 +90,15 @@ export default function ForecastCreator({ seedStorm }) {
 
   function addPoint(lat, lon) {
     const nextHour = points.length === 0 ? 0 : points[points.length - 1].hour + HOUR_STEP;
-    setPoints((prev) => [...prev, { lat, lon, hour: nextHour, wind: DEFAULT_WIND_KT }]);
+    setPoints((prev) => [...prev, { lat, lon, hour: nextHour, wind: DEFAULT_WIND_KT, override: null }]);
   }
 
   function updateWind(index, wind) {
     setPoints((prev) => prev.map((p, i) => (i === index ? { ...p, wind } : p)));
+  }
+
+  function updateOverride(index, override) {
+    setPoints((prev) => prev.map((p, i) => (i === index ? { ...p, override: override || null } : p)));
   }
 
   function removeLast() {
@@ -96,6 +117,7 @@ export default function ForecastCreator({ seedStorm }) {
         lon: seedStorm.lon,
         hour: 0,
         wind: parseFloat(seedStorm.intensity) || DEFAULT_WIND_KT,
+        override: null,
       },
     ]);
   }
@@ -110,7 +132,7 @@ export default function ForecastCreator({ seedStorm }) {
         <div className="creator-toolbar-info">
           <p>
             Click the map to drop forecast points, each one +{HOUR_STEP}h from the last.
-            Set each point's wind speed below to build your own track and cone.
+            Set each point's wind speed (or mark it Invest/Extratropical) below.
           </p>
         </div>
         <div className="creator-toolbar-actions">
@@ -152,7 +174,7 @@ export default function ForecastCreator({ seedStorm }) {
         )}
 
         {points.map((p, i) => {
-          const { color, short } = classifyIntensity(p.wind);
+          const { color, short } = pointClassification(p);
           return (
             <CircleMarker
               key={i}
@@ -161,7 +183,7 @@ export default function ForecastCreator({ seedStorm }) {
               pathOptions={{ color: "#05070c", weight: 1.5, fillColor: color, fillOpacity: 0.95 }}
             >
               <Tooltip direction="top" offset={[0, -6]}>
-                +{p.hour}h · {p.wind} kt · {short}
+                +{p.hour}h · {p.override ? short : `${p.wind} kt · ${short}`}
               </Tooltip>
             </CircleMarker>
           );
@@ -171,10 +193,19 @@ export default function ForecastCreator({ seedStorm }) {
       {points.length > 0 && (
         <div className="creator-points-list">
           {points.map((p, i) => {
-            const { label, color } = classifyIntensity(p.wind);
+            const { label, color } = pointClassification(p);
             return (
               <div key={i} className="creator-point-row">
                 <span className="creator-point-hour">+{p.hour}h</span>
+                <select
+                  className="ctl-select"
+                  value={p.override ?? ""}
+                  onChange={(e) => updateOverride(i, e.target.value)}
+                >
+                  <option value="">Auto (by wind)</option>
+                  <option value="INVEST">Invest</option>
+                  <option value="EXTRATROPICAL">Extratropical</option>
+                </select>
                 <input
                   type="range"
                   min={10}
@@ -183,9 +214,10 @@ export default function ForecastCreator({ seedStorm }) {
                   value={p.wind}
                   onChange={(e) => updateWind(i, Number(e.target.value))}
                   className="scrubber"
+                  disabled={!!p.override}
                 />
                 <span className="creator-point-wind" style={{ color }}>
-                  {p.wind} kt · {label}
+                  {p.override ? label : `${p.wind} kt · ${label}`}
                 </span>
               </div>
             );
@@ -196,6 +228,12 @@ export default function ForecastCreator({ seedStorm }) {
       <div className="legend-section">
         <div className="legend-row">
           {INTENSITY_SCALE.map((cat) => (
+            <span key={cat.short} className="legend-item">
+              <span className="legend-swatch-dot" style={{ background: cat.color }} />
+              {cat.label}
+            </span>
+          ))}
+          {Object.values(SPECIAL_CLASSIFICATIONS).map((cat) => (
             <span key={cat.short} className="legend-item">
               <span className="legend-swatch-dot" style={{ background: cat.color }} />
               {cat.label}
