@@ -1,4 +1,5 @@
 import { useState } from "react";
+import polygonClipping from "polygon-clipping";
 import {
   MapContainer,
   TileLayer,
@@ -120,6 +121,23 @@ function buildConeSegments(points) {
   return segments;
 }
 
+// The capsule segments above overlap each other wherever the track
+// bends or points are close together - rendering them as separate
+// semi-transparent shapes means every overlap stacks its opacity on top
+// of itself, so those spots look visibly darker/brighter than the rest
+// of the cone. The real fix is a proper boolean union: merge every
+// segment into ONE flat shape first, so there's only ever a single
+// layer of fill anywhere on the map, with no double-counted overlaps.
+// Writing a correct polygon-union algorithm from scratch is genuinely
+// tricky computational geometry (handling every edge-intersection case
+// correctly), so this uses a small, well-tested library rather than a
+// hand-rolled version that might get an edge case wrong.
+function unionSegments(segments) {
+  if (segments.length === 0) return null;
+  const asPolygons = segments.map((ring) => [[...ring, ring[0]]]); // close each ring
+  return polygonClipping.union(...asPolygons);
+}
+
 export default function ForecastCreator({ seedStorm }) {
   const [points, setPoints] = useState([]);
 
@@ -158,6 +176,7 @@ export default function ForecastCreator({ seedStorm }) {
   }
 
   const coneSegments = buildConeSegments(points);
+  const coneUnion = unionSegments(coneSegments);
   const trackPositions = points.map((p) => [p.lat, p.lon]);
   const mapCenter = points.length > 0 ? trackPositions[trackPositions.length - 1] : [20, -60];
 
@@ -207,13 +226,12 @@ export default function ForecastCreator({ seedStorm }) {
 
         <MapClickHandler onClick={addPoint} />
 
-        {coneSegments.map((segment, i) => (
+        {coneUnion && (
           <Polygon
-            key={i}
-            positions={segment}
-            pathOptions={{ stroke: false, fillColor: "#3b9eff", fillOpacity: 0.18 }}
+            positions={coneUnion}
+            pathOptions={{ color: "#3b9eff", weight: 1.5, fillColor: "#3b9eff", fillOpacity: 0.18 }}
           />
-        ))}
+        )}
 
         {trackPositions.length > 1 && (
           <Polyline positions={trackPositions} pathOptions={{ color: "#ffffff", weight: 2, opacity: 0.9 }} />
