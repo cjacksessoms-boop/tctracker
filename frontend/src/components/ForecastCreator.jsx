@@ -72,35 +72,52 @@ function convexHull(pts) {
 
 const CIRCLE_SAMPLES = 24;
 
-// Builds a "cone" as the outer envelope (convex hull) of a growing
-// circle at EVERY point, rather than offsetting perpendicular to the
-// track's direction. The direction-offset approach looked fine for a
-// storm moving steadily one way, but broke down (self-intersecting
-// "crossovers," gaps) for erratic or slow/looping movement, because the
-// offset direction flips around whenever the local direction reverses.
-// A circle union has no such failure mode - it's robust to ANY track
-// shape, including one that doubles back on itself or barely moves at
-// all. This is also closer in spirit to how NHC's real cone works (a
-// swath built from error-radius circles at each forecast point), though
-// still an illustrative approximation, not their real statistical
-// model.
-function buildCone(points) {
-  if (points.length === 0) return null;
+function pointRadiusDeg(p) {
+  const steps = p.hour / HOUR_STEP;
+  // Tuned so the cone reaches roughly NHC's real full-size scale by
+  // about 120 hours (5 days) out.
+  return 0.03 + Math.pow(steps, 1.5) * 0.11;
+}
 
-  const samples = [];
-  points.forEach((p) => {
-    const steps = p.hour / HOUR_STEP;
-    // Tuned so the cone reaches roughly NHC's real full-size scale by
-    // about 120 hours (5 days) out.
-    const radiusDeg = 0.03 + Math.pow(steps, 1.5) * 0.11;
-    for (let i = 0; i < CIRCLE_SAMPLES; i++) {
-      const angle = (i / CIRCLE_SAMPLES) * 2 * Math.PI;
-      samples.push([p.lat + radiusDeg * Math.sin(angle), p.lon + radiusDeg * Math.cos(angle)]);
-    }
-  });
+function circleSamples(p) {
+  const radiusDeg = pointRadiusDeg(p);
+  const pts = [];
+  for (let i = 0; i < CIRCLE_SAMPLES; i++) {
+    const angle = (i / CIRCLE_SAMPLES) * 2 * Math.PI;
+    pts.push([p.lat + radiusDeg * Math.sin(angle), p.lon + radiusDeg * Math.cos(angle)]);
+  }
+  return pts;
+}
 
-  if (samples.length < 3) return null;
-  return convexHull(samples);
+// Builds the "cone" as a chain of overlapping capsule shapes, one per
+// consecutive pair of points, rather than a single hull over every
+// point at once. This matters for two reasons a single whole-track hull
+// got wrong:
+//   1. CENTERING - the outer tangent lines of exactly two circles are
+//      mathematically guaranteed to be symmetric about the line joining
+//      their centers. A hull over many points at once has no such
+//      guarantee and can end up visibly off-center from the real track,
+//      especially once radii differ a lot between points.
+//   2. SHAPE AT BENDS - a whole-track hull only cares about the outer
+//      envelope of ALL circles combined, so a bend in the middle of the
+//      track (e.g. heading north, then turning) can get "swallowed"
+//      entirely, collapsing into a straight-line triangle from start to
+//      end instead of following the actual path.
+// Each capsule is still a 2-circle hull, so it's individually always
+// simple/convex - immune to the self-intersection problem erratic or
+// looping tracks caused with the old direction-offset method. Adjacent
+// capsules share the exact same circle at their shared point, so bends
+// come out as a natural rounded elbow rather than a sharp seam.
+function buildConeSegments(points) {
+  if (points.length === 0) return [];
+  if (points.length === 1) return [circleSamples(points[0])];
+
+  const segments = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const samples = [...circleSamples(points[i]), ...circleSamples(points[i + 1])];
+    segments.push(convexHull(samples));
+  }
+  return segments;
 }
 
 export default function ForecastCreator({ seedStorm }) {
@@ -140,7 +157,7 @@ export default function ForecastCreator({ seedStorm }) {
     ]);
   }
 
-  const cone = buildCone(points);
+  const coneSegments = buildConeSegments(points);
   const trackPositions = points.map((p) => [p.lat, p.lon]);
   const mapCenter = points.length > 0 ? trackPositions[trackPositions.length - 1] : [20, -60];
 
@@ -190,12 +207,13 @@ export default function ForecastCreator({ seedStorm }) {
 
         <MapClickHandler onClick={addPoint} />
 
-        {cone && (
+        {coneSegments.map((segment, i) => (
           <Polygon
-            positions={cone}
-            pathOptions={{ color: "#3b9eff", weight: 1.5, fillColor: "#3b9eff", fillOpacity: 0.18 }}
+            key={i}
+            positions={segment}
+            pathOptions={{ stroke: false, fillColor: "#3b9eff", fillOpacity: 0.18 }}
           />
-        )}
+        ))}
 
         {trackPositions.length > 1 && (
           <Polyline positions={trackPositions} pathOptions={{ color: "#ffffff", weight: 2, opacity: 0.9 }} />
