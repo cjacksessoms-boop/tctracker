@@ -217,7 +217,7 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
       </div>
 
       <div className="panel-body panel-body-flush">
-        <MapContainer center={[20, -60]} zoom={3} className="map-canvas" zoomControl={true} scrollWheelZoom={false}>
+        <MapContainer center={[20, -60]} zoom={3} className="map-canvas" zoomControl={true} scrollWheelZoom={true}>
           {/* Esri World Imagery - real satellite/aerial photography,
               same general idea as Google Earth's basemap, no API key
               needed. */}

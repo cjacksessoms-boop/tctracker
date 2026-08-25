@@ -223,6 +223,9 @@ export default function ForecastCreator({ seedStorm }) {
         zoom={4}
         className="map-canvas"
         style={{ height: "420px", width: "100%" }}
+        zoomControl={true}
+        scrollWheelZoom={true}
+        doubleClickZoom={false}
       >
         {/* Esri World Imagery - real satellite/aerial photography, same
             general idea as Google Earth's basemap, no API key needed. */}
