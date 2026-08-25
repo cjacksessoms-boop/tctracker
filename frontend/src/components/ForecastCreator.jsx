@@ -39,118 +39,68 @@ function MapClickHandler({ onClick }) {
   return null;
 }
 
-// Catmull-Rom spline: turns a jagged sequence of points into a smooth
-// curve by sampling several interpolated points between each pair,
-// instead of connecting them with straight polygon edges. This is what
-// actually removes the sharp/angular look, not just a bigger radius.
-function catmullRom(points, segmentsPerSpan = 10) {
-  if (points.length < 3) return points;
-  const at = (i) => points[Math.max(0, Math.min(points.length - 1, i))];
-  const result = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
-    for (let s = 0; s < segmentsPerSpan; s++) {
-      const t = s / segmentsPerSpan;
-      const t2 = t * t, t3 = t2 * t;
-      const lat =
-        0.5 *
-        (2 * p1[0] +
-          (-p0[0] + p2[0]) * t +
-          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
-          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
-      const lon =
-        0.5 *
-        (2 * p1[1] +
-          (-p0[1] + p2[1]) * t +
-          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
-          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
-      result.push([lat, lon]);
+// Andrew's monotone chain convex hull - a well-established algorithm
+// that always produces a valid, simple (non-self-intersecting) polygon
+// no matter how the input points are arranged. That guarantee is the
+// whole point of using it here.
+function cross(o, a, b) {
+  return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+}
+function convexHull(pts) {
+  const points = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (points.length <= 2) return points;
+
+  const lower = [];
+  for (const p of points) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+      lower.pop();
     }
+    lower.push(p);
   }
-  result.push(points[points.length - 1]);
-  return result;
+  const upper = [];
+  for (let i = points.length - 1; i >= 0; i--) {
+    const p = points[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+      upper.pop();
+    }
+    upper.push(p);
+  }
+  upper.pop();
+  lower.pop();
+  return lower.concat(upper);
 }
 
-// A short arc of points around a center - used for the rounded caps at
-// each end of the cone, matching NHC's actual cone shape (a soft round
-// nub at the current position, a rounded cap at the far end) rather
-// than the sharp flat ends a plain offset-ribbon polygon produces.
-function arcPoints(centerLat, centerLon, radiusDeg, fromAngle, toAngle, steps = 14) {
-  const pts = [];
-  for (let i = 0; i <= steps; i++) {
-    const t = fromAngle + (toAngle - fromAngle) * (i / steps);
-    pts.push([centerLat + radiusDeg * Math.sin(t), centerLon + radiusDeg * Math.cos(t)]);
-  }
-  return pts;
-}
+const CIRCLE_SAMPLES = 24;
 
-// Builds a smooth, rounded "cone" - an illustrative approximation of
-// NHC's cone of uncertainty (not their real statistical model), meant
-// for exploring "what if" scenarios rather than as an actual forecast
-// product. The shape: rounded cap at the start, a smoothly curved
-// widening body, rounded cap at the end - matching the classic NHC
-// cone look rather than a straight-edged polygon.
+// Builds a "cone" as the outer envelope (convex hull) of a growing
+// circle at EVERY point, rather than offsetting perpendicular to the
+// track's direction. The direction-offset approach looked fine for a
+// storm moving steadily one way, but broke down (self-intersecting
+// "crossovers," gaps) for erratic or slow/looping movement, because the
+// offset direction flips around whenever the local direction reverses.
+// A circle union has no such failure mode - it's robust to ANY track
+// shape, including one that doubles back on itself or barely moves at
+// all. This is also closer in spirit to how NHC's real cone works (a
+// swath built from error-radius circles at each forecast point), though
+// still an illustrative approximation, not their real statistical
+// model.
 function buildCone(points) {
-  if (points.length < 2) return null;
+  if (points.length === 0) return null;
 
-  const tangents = points.map((p, i) => {
-    const prev = points[i - 1];
-    const next = points[i + 1];
-    let dx, dy;
-    if (prev && next) {
-      dx = next.lon - prev.lon;
-      dy = next.lat - prev.lat;
-    } else if (next) {
-      dx = next.lon - p.lon;
-      dy = next.lat - p.lat;
-    } else {
-      dx = p.lon - prev.lon;
-      dy = p.lat - prev.lat;
-    }
-    return Math.atan2(dy, dx);
-  });
-
-  // Tuned so the cone reaches roughly NHC's real full-size scale by
-  // about 120 hours (5 days) out, matching how far their actual
-  // forecast cone extends.
-  const radii = points.map((p) => {
+  const samples = [];
+  points.forEach((p) => {
     const steps = p.hour / HOUR_STEP;
-    return 0.03 + Math.pow(steps, 1.5) * 0.11;
+    // Tuned so the cone reaches roughly NHC's real full-size scale by
+    // about 120 hours (5 days) out.
+    const radiusDeg = 0.03 + Math.pow(steps, 1.5) * 0.11;
+    for (let i = 0; i < CIRCLE_SAMPLES; i++) {
+      const angle = (i / CIRCLE_SAMPLES) * 2 * Math.PI;
+      samples.push([p.lat + radiusDeg * Math.sin(angle), p.lon + radiusDeg * Math.cos(angle)]);
+    }
   });
 
-  const leftRaw = points.map((p, i) => [
-    p.lat + radii[i] * Math.sin(tangents[i] + Math.PI / 2),
-    p.lon + radii[i] * Math.cos(tangents[i] + Math.PI / 2),
-  ]);
-  const rightRaw = points.map((p, i) => [
-    p.lat + radii[i] * Math.sin(tangents[i] - Math.PI / 2),
-    p.lon + radii[i] * Math.cos(tangents[i] - Math.PI / 2),
-  ]);
-
-  const leftSmooth = catmullRom(leftRaw);
-  const rightSmooth = catmullRom(rightRaw);
-
-  const first = points[0];
-  const last = points[points.length - 1];
-  const firstAngle = tangents[0];
-  const lastAngle = tangents[tangents.length - 1];
-
-  // Start cap sweeps the "long way" around (through the backward
-  // direction) so it bulges outward behind the first point, matching
-  // the rounded nub at the storm's current position.
-  const startCap = arcPoints(
-    first.lat, first.lon, radii[0],
-    firstAngle - Math.PI / 2, firstAngle - (3 * Math.PI) / 2
-  );
-
-  // End cap sweeps through the forward direction, bulging ahead of the
-  // last point - the rounded cap at the far end of the cone.
-  const endCap = arcPoints(
-    last.lat, last.lon, radii[radii.length - 1],
-    lastAngle + Math.PI / 2, lastAngle - Math.PI / 2
-  );
-
-  return [...startCap, ...leftSmooth, ...endCap, ...rightSmooth.reverse()];
+  if (samples.length < 3) return null;
+  return convexHull(samples);
 }
 
 export default function ForecastCreator({ seedStorm }) {
