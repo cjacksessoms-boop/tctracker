@@ -39,25 +39,61 @@ function MapClickHandler({ onClick }) {
   return null;
 }
 
-// Builds a widening "cone" polygon around the track by offsetting each
-// point perpendicular to its local direction, with the offset distance
-// growing with forecast hour. This is a fun, illustrative approximation
-// of NHC's cone of uncertainty - not their actual statistical model
-// (which is based on historical forecast error, not a fixed formula) -
-// so it's meant for exploring "what if" scenarios, not as a real
-// forecast product.
-//
-// The radius starts SMALL and grows non-linearly (rather than starting
-// already-wide and growing slowly) - that near-zero start is what
-// actually makes this read as a flaring cone instead of a rectangle
-// with only a couple of points on the track.
+// Catmull-Rom spline: turns a jagged sequence of points into a smooth
+// curve by sampling several interpolated points between each pair,
+// instead of connecting them with straight polygon edges. This is what
+// actually removes the sharp/angular look, not just a bigger radius.
+function catmullRom(points, segmentsPerSpan = 10) {
+  if (points.length < 3) return points;
+  const at = (i) => points[Math.max(0, Math.min(points.length - 1, i))];
+  const result = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    for (let s = 0; s < segmentsPerSpan; s++) {
+      const t = s / segmentsPerSpan;
+      const t2 = t * t, t3 = t2 * t;
+      const lat =
+        0.5 *
+        (2 * p1[0] +
+          (-p0[0] + p2[0]) * t +
+          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+      const lon =
+        0.5 *
+        (2 * p1[1] +
+          (-p0[1] + p2[1]) * t +
+          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+      result.push([lat, lon]);
+    }
+  }
+  result.push(points[points.length - 1]);
+  return result;
+}
+
+// A short arc of points around a center - used for the rounded caps at
+// each end of the cone, matching NHC's actual cone shape (a soft round
+// nub at the current position, a rounded cap at the far end) rather
+// than the sharp flat ends a plain offset-ribbon polygon produces.
+function arcPoints(centerLat, centerLon, radiusDeg, fromAngle, toAngle, steps = 14) {
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = fromAngle + (toAngle - fromAngle) * (i / steps);
+    pts.push([centerLat + radiusDeg * Math.sin(t), centerLon + radiusDeg * Math.cos(t)]);
+  }
+  return pts;
+}
+
+// Builds a smooth, rounded "cone" - an illustrative approximation of
+// NHC's cone of uncertainty (not their real statistical model), meant
+// for exploring "what if" scenarios rather than as an actual forecast
+// product. The shape: rounded cap at the start, a smoothly curved
+// widening body, rounded cap at the end - matching the classic NHC
+// cone look rather than a straight-edged polygon.
 function buildCone(points) {
   if (points.length < 2) return null;
 
-  const left = [];
-  const right = [];
-
-  points.forEach((p, i) => {
+  const tangents = points.map((p, i) => {
     const prev = points[i - 1];
     const next = points[i + 1];
     let dx, dy;
@@ -71,22 +107,50 @@ function buildCone(points) {
       dx = p.lon - prev.lon;
       dy = p.lat - prev.lat;
     }
-    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    const nx = -dy / len;
-    const ny = dx / len;
-
-    // Tuned so the cone reaches roughly NHC's real full-size scale by
-    // about 120 hours (5 days) out - matching how far their actual
-    // forecast cone extends, rather than needing 200+ hours to look
-    // "normal sized."
-    const steps = p.hour / HOUR_STEP;
-    const radiusDeg = 0.03 + Math.pow(steps, 1.5) * 0.11;
-
-    left.push([p.lat + ny * radiusDeg, p.lon + nx * radiusDeg]);
-    right.push([p.lat - ny * radiusDeg, p.lon - nx * radiusDeg]);
+    return Math.atan2(dy, dx);
   });
 
-  return [...left, ...right.reverse()];
+  // Tuned so the cone reaches roughly NHC's real full-size scale by
+  // about 120 hours (5 days) out, matching how far their actual
+  // forecast cone extends.
+  const radii = points.map((p) => {
+    const steps = p.hour / HOUR_STEP;
+    return 0.03 + Math.pow(steps, 1.5) * 0.11;
+  });
+
+  const leftRaw = points.map((p, i) => [
+    p.lat + radii[i] * Math.sin(tangents[i] + Math.PI / 2),
+    p.lon + radii[i] * Math.cos(tangents[i] + Math.PI / 2),
+  ]);
+  const rightRaw = points.map((p, i) => [
+    p.lat + radii[i] * Math.sin(tangents[i] - Math.PI / 2),
+    p.lon + radii[i] * Math.cos(tangents[i] - Math.PI / 2),
+  ]);
+
+  const leftSmooth = catmullRom(leftRaw);
+  const rightSmooth = catmullRom(rightRaw);
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  const firstAngle = tangents[0];
+  const lastAngle = tangents[tangents.length - 1];
+
+  // Start cap sweeps the "long way" around (through the backward
+  // direction) so it bulges outward behind the first point, matching
+  // the rounded nub at the storm's current position.
+  const startCap = arcPoints(
+    first.lat, first.lon, radii[0],
+    firstAngle - Math.PI / 2, firstAngle - (3 * Math.PI) / 2
+  );
+
+  // End cap sweeps through the forward direction, bulging ahead of the
+  // last point - the rounded cap at the far end of the cone.
+  const endCap = arcPoints(
+    last.lat, last.lon, radii[radii.length - 1],
+    lastAngle + Math.PI / 2, lastAngle - Math.PI / 2
+  );
+
+  return [...startCap, ...leftSmooth, ...endCap, ...rightSmooth.reverse()];
 }
 
 export default function ForecastCreator({ seedStorm }) {
@@ -160,21 +224,28 @@ export default function ForecastCreator({ seedStorm }) {
         className="map-canvas"
         style={{ height: "420px", width: "100%" }}
       >
+        {/* Esri World Imagery - real satellite/aerial photography, same
+            general idea as Google Earth's basemap, no API key needed. */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          attribution="Tiles &copy; Esri"
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         />
+        {/* A transparent overlay of place names/borders on top of the
+            imagery - without this, satellite tiles alone have no labels
+            at all, unlike Google Earth's default view. */}
+        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
+
         <MapClickHandler onClick={addPoint} />
 
         {cone && (
           <Polygon
             positions={cone}
-            pathOptions={{ color: "#3b9eff", weight: 1, fillColor: "#3b9eff", fillOpacity: 0.12 }}
+            pathOptions={{ color: "#3b9eff", weight: 1.5, fillColor: "#3b9eff", fillOpacity: 0.18 }}
           />
         )}
 
         {trackPositions.length > 1 && (
-          <Polyline positions={trackPositions} pathOptions={{ color: "#eaeef7", weight: 2, opacity: 0.8 }} />
+          <Polyline positions={trackPositions} pathOptions={{ color: "#ffffff", weight: 2, opacity: 0.9 }} />
         )}
 
         {points.map((p, i) => {

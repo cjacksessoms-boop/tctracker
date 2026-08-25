@@ -218,10 +218,16 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
 
       <div className="panel-body panel-body-flush">
         <MapContainer center={[20, -60]} zoom={3} className="map-canvas" zoomControl={true} scrollWheelZoom={false}>
+          {/* Esri World Imagery - real satellite/aerial photography,
+              same general idea as Google Earth's basemap, no API key
+              needed. */}
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution="Tiles &copy; Esri"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           />
+          {/* Transparent place-name/border overlay on top of the raw
+              imagery - satellite tiles alone have no labels at all. */}
+          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
 
           {/* Forecast cone drawn as a subtle white envelope - present but
               never louder than the tracks and markers inside it. */}
