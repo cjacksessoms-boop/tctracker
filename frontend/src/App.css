@@ -1223,3 +1223,13 @@ button { font-family: inherit; }
 }
 
 .view-toggle { display: flex; gap: 6px; margin: 0 16px; }
+
+/* Permanent forecast-time labels in the Forecast Creator - a bit more
+   opaque than a normal hover tooltip since these stay visible
+   permanently over busy satellite imagery. */
+.forecast-time-label {
+  background: rgba(11, 16, 28, 0.92) !important;
+  font-family: var(--font-mono) !important;
+  line-height: 1.4 !important;
+  white-space: nowrap;
+}

@@ -138,8 +138,23 @@ function unionSegments(segments) {
   return polygonClipping.union(...asPolygons);
 }
 
+// Formats a point's actual forecast time as "5:00 AM Mon" - UTC rather
+// than a guessed local time zone, since a track can span many time
+// zones and we have no reliable way to know which one applies at each
+// point.
+function formatPointTime(baseTime, hourOffset) {
+  const dt = new Date(baseTime.getTime() + hourOffset * 3600 * 1000);
+  const time = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
+  const weekday = dt.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+  return `${time} ${weekday} UTC`;
+}
+
 export default function ForecastCreator({ seedStorm }) {
   const [points, setPoints] = useState([]);
+  // Only set when the track was seeded from a real storm's actual
+  // current time - free-drawn points have no real clock to reference,
+  // so time labels only ever show when this is non-null.
+  const [baseTime, setBaseTime] = useState(null);
 
   function addPoint(lat, lon) {
     const nextHour = points.length === 0 ? 0 : points[points.length - 1].hour + HOUR_STEP;
@@ -160,6 +175,7 @@ export default function ForecastCreator({ seedStorm }) {
 
   function clearAll() {
     setPoints([]);
+    setBaseTime(null);
   }
 
   function seedFromStorm() {
@@ -173,6 +189,7 @@ export default function ForecastCreator({ seedStorm }) {
         override: null,
       },
     ]);
+    setBaseTime(seedStorm.lastUpdate ? new Date(seedStorm.lastUpdate) : null);
   }
 
   const coneSegments = buildConeSegments(points);
@@ -243,6 +260,13 @@ export default function ForecastCreator({ seedStorm }) {
 
         {points.map((p, i) => {
           const { color, short } = pointClassification(p);
+          const detail = p.override ? short : `${p.wind} kt · ${short}`;
+          // Alternate label side so labels along a track don't stack on
+          // top of each other - matches the look of NHC's own cone
+          // graphics, where the time labels zigzag left/right of the line.
+          const side = i % 2 === 0 ? "right" : "left";
+          const offsetX = side === "right" ? 14 : -14;
+
           return (
             <CircleMarker
               key={i}
@@ -250,9 +274,21 @@ export default function ForecastCreator({ seedStorm }) {
               radius={7}
               pathOptions={{ color: "#05070c", weight: 1.5, fillColor: color, fillOpacity: 0.95 }}
             >
-              <Tooltip direction="top" offset={[0, -6]}>
-                +{p.hour}h · {p.override ? short : `${p.wind} kt · ${short}`}
-              </Tooltip>
+              {baseTime ? (
+                <Tooltip
+                  direction={side}
+                  offset={[offsetX, 0]}
+                  permanent={true}
+                  className="forecast-time-label"
+                >
+                  <strong>{formatPointTime(baseTime, p.hour)}</strong>
+                  <br />+{p.hour}h · {detail}
+                </Tooltip>
+              ) : (
+                <Tooltip direction="top" offset={[0, -6]}>
+                  +{p.hour}h · {detail}
+                </Tooltip>
+              )}
             </CircleMarker>
           );
         })}
