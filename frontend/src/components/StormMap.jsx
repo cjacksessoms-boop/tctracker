@@ -223,9 +223,8 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
           className="map-canvas"
           zoomControl={true}
           scrollWheelZoom={true}
-          maxBounds={[[-90, -180], [90, 180]]}
-          maxBoundsViscosity={1.0}
-          minZoom={2}
+          worldCopyJump={true}
+          minZoom={3}
         >
           {/* Esri World Imagery - real satellite/aerial photography,
               same general idea as Google Earth's basemap, no API key
@@ -233,13 +232,11 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
           <TileLayer
             attribution="Tiles &copy; Esri"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-            noWrap={true}
           />
           {/* Transparent place-name/border overlay on top of the raw
               imagery - satellite tiles alone have no labels at all. */}
           <TileLayer
             url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-            noWrap={true}
           />
 
           {/* Forecast cone drawn as a subtle white envelope - present but
