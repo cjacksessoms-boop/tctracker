@@ -212,17 +212,24 @@ export default function ForecastCreator({ seedStorm }) {
         zoomControl={true}
         scrollWheelZoom={true}
         doubleClickZoom={false}
+        maxBounds={[[-90, -180], [90, 180]]}
+        maxBoundsViscosity={1.0}
+        minZoom={2}
       >
         {/* Esri World Imagery - real satellite/aerial photography, same
             general idea as Google Earth's basemap, no API key needed. */}
         <TileLayer
           attribution="Tiles &copy; Esri"
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          noWrap={true}
         />
         {/* A transparent overlay of place names/borders on top of the
             imagery - without this, satellite tiles alone have no labels
             at all, unlike Google Earth's default view. */}
-        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+          noWrap={true}
+        />
 
         <MapClickHandler onClick={addPoint} />
 

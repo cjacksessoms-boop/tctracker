@@ -217,17 +217,30 @@ export default function StormMap({ storms, selectedStorm, onSelect }) {
       </div>
 
       <div className="panel-body panel-body-flush">
-        <MapContainer center={[20, -60]} zoom={3} className="map-canvas" zoomControl={true} scrollWheelZoom={true}>
+        <MapContainer
+          center={[20, -60]}
+          zoom={3}
+          className="map-canvas"
+          zoomControl={true}
+          scrollWheelZoom={true}
+          maxBounds={[[-90, -180], [90, 180]]}
+          maxBoundsViscosity={1.0}
+          minZoom={2}
+        >
           {/* Esri World Imagery - real satellite/aerial photography,
               same general idea as Google Earth's basemap, no API key
               needed. */}
           <TileLayer
             attribution="Tiles &copy; Esri"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            noWrap={true}
           />
           {/* Transparent place-name/border overlay on top of the raw
               imagery - satellite tiles alone have no labels at all. */}
-          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            noWrap={true}
+          />
 
           {/* Forecast cone drawn as a subtle white envelope - present but
               never louder than the tracks and markers inside it. */}
