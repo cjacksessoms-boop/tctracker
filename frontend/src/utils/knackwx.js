@@ -45,7 +45,14 @@ function normalizeKnackwxStorm(raw) {
     lon: raw.longitude,
     movementDir: raw.movedir ?? null,
     movementSpeed: raw.movespeed ?? null,
-    lastUpdate: raw.last_updated ?? raw.analysis_time ?? null,
+    // analysis_time is the storm's actual synoptic position time (always
+    // clean, on the hour). last_updated is just "when our backend last
+    // processed this record" - an arbitrary timestamp with real
+    // minutes/seconds (e.g. "01:17:02") that has nothing to do with the
+    // storm's actual valid time. Using it as a base time for anything
+    // (like the Forecast Creator's time labels) produced odd results
+    // like every point showing ":16" or ":17" minutes forever.
+    lastUpdate: raw.analysis_time ?? raw.last_updated ?? null,
     basin: raw.basin ?? null,
     source: "knackwx",
     raw,

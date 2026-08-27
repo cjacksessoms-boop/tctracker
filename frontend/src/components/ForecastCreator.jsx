@@ -149,8 +149,28 @@ function formatPointTime(baseTime, hourOffset) {
   return `${time} ${weekday} UTC`;
 }
 
+// NHC's Tropical Weather Outlook uses a rough 3-tier color scheme for
+// formation chance percentages: yellow for low, orange for medium, red
+// for high. These are the commonly recognized approximate cutoffs, not
+// verbatim from an official NHC style guide, so treat them as a solid
+// approximation rather than an exact match.
+function aoiColor(pct) {
+  if (pct >= 60) return "#ef4444"; // high
+  if (pct >= 40) return "#f97316"; // medium
+  return "#fbbf24"; // low
+}
+function aoiTierLabel(pct) {
+  if (pct >= 60) return "High";
+  if (pct >= 40) return "Medium";
+  return "Low";
+}
+
 export default function ForecastCreator({ seedStorm }) {
   const [points, setPoints] = useState([]);
+  const [mode, setMode] = useState("track"); // track | aoi
+  const [aois, setAois] = useState([]); // { id, ring: [[lat,lon],...], pct }
+  const [drawingRing, setDrawingRing] = useState([]);
+  const [pendingPct, setPendingPct] = useState("40");
   // Only set when the track was seeded from a real storm's actual
   // current time - free-drawn points have no real clock to reference,
   // so time labels only ever show when this is non-null.
@@ -192,6 +212,38 @@ export default function ForecastCreator({ seedStorm }) {
     setBaseTime(seedStorm.lastUpdate ? new Date(seedStorm.lastUpdate) : null);
   }
 
+  function handleMapClick(lat, lon) {
+    if (mode === "aoi") {
+      setDrawingRing((prev) => [...prev, [lat, lon]]);
+    } else {
+      addPoint(lat, lon);
+    }
+  }
+
+  function finishAoi() {
+    if (drawingRing.length < 3) return;
+    const pct = Math.max(0, Math.min(100, parseInt(pendingPct, 10) || 0));
+    setAois((prev) => [...prev, { id: Date.now(), ring: drawingRing, pct }]);
+    setDrawingRing([]);
+  }
+
+  function undoAoiVertex() {
+    setDrawingRing((prev) => prev.slice(0, -1));
+  }
+
+  function cancelAoi() {
+    setDrawingRing([]);
+  }
+
+  function removeLastAoi() {
+    setAois((prev) => prev.slice(0, -1));
+  }
+
+  function clearAois() {
+    setAois([]);
+    setDrawingRing([]);
+  }
+
   const coneSegments = buildConeSegments(points);
   const coneUnion = unionSegments(coneSegments);
   const trackPositions = points.map((p) => [p.lat, p.lon]);
@@ -204,6 +256,7 @@ export default function ForecastCreator({ seedStorm }) {
           <p>
             Click the map to drop forecast points, each one +{HOUR_STEP}h from the last.
             Set each point's wind speed (or mark it Invest/Extratropical) below.
+            {mode === "aoi" && " Right now clicks place AOI vertices instead - toggle it off to go back to track points."}
           </p>
         </div>
         <div className="creator-toolbar-actions">
@@ -218,8 +271,55 @@ export default function ForecastCreator({ seedStorm }) {
           <button className="ctl" onClick={clearAll} disabled={points.length === 0}>
             Clear
           </button>
+          <label className="ctl-check">
+            <input
+              type="checkbox"
+              checked={mode === "aoi"}
+              onChange={(e) => setMode(e.target.checked ? "aoi" : "track")}
+            />
+            Draw outlook area (AOI) instead
+          </label>
         </div>
       </div>
+
+      {mode === "aoi" && (
+        <div className="creator-toolbar">
+          <div className="creator-toolbar-info">
+            <p>
+              Click the map to place AOI vertices (need at least 3), set a formation-chance
+              percentage, then finish the shape. Color follows NHC's Low/Medium/High scheme.
+            </p>
+          </div>
+          <div className="creator-toolbar-actions">
+            <label className="aoi-pct-input">
+              Chance
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={pendingPct}
+                onChange={(e) => setPendingPct(e.target.value)}
+              />
+              %
+            </label>
+            <button className="ctl" onClick={undoAoiVertex} disabled={drawingRing.length === 0}>
+              Undo vertex
+            </button>
+            <button className="ctl" onClick={cancelAoi} disabled={drawingRing.length === 0}>
+              Cancel shape
+            </button>
+            <button className="ctl active" onClick={finishAoi} disabled={drawingRing.length < 3}>
+              Finish AOI
+            </button>
+            <button className="ctl" onClick={removeLastAoi} disabled={aois.length === 0}>
+              Undo last AOI
+            </button>
+            <button className="ctl" onClick={clearAois} disabled={aois.length === 0}>
+              Clear AOIs
+            </button>
+          </div>
+        </div>
+      )}
 
       <MapContainer
         center={mapCenter}
@@ -245,7 +345,7 @@ export default function ForecastCreator({ seedStorm }) {
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
         />
 
-        <MapClickHandler onClick={addPoint} />
+        <MapClickHandler onClick={handleMapClick} />
 
         {coneUnion && (
           <Polygon
@@ -261,11 +361,12 @@ export default function ForecastCreator({ seedStorm }) {
         {points.map((p, i) => {
           const { color, short } = pointClassification(p);
           const detail = p.override ? short : `${p.wind} kt · ${short}`;
-          // Alternate label side so labels along a track don't stack on
-          // top of each other - matches the look of NHC's own cone
-          // graphics, where the time labels zigzag left/right of the line.
+          // Stagger labels on a 4-way rotation (not just left/right) so
+          // consecutive labels get more separation from both the track
+          // AND each other, especially when points are close together.
           const side = i % 2 === 0 ? "right" : "left";
-          const offsetX = side === "right" ? 46 : -46;
+          const offsetX = side === "right" ? 80 : -80;
+          const offsetY = Math.floor(i / 2) % 2 === 0 ? -16 : 16;
 
           return (
             <CircleMarker
@@ -277,7 +378,7 @@ export default function ForecastCreator({ seedStorm }) {
               {baseTime ? (
                 <Tooltip
                   direction={side}
-                  offset={[offsetX, 0]}
+                  offset={[offsetX, offsetY]}
                   permanent={true}
                   className="forecast-time-label"
                 >
@@ -292,6 +393,37 @@ export default function ForecastCreator({ seedStorm }) {
             </CircleMarker>
           );
         })}
+        {aois.map((aoi) => {
+          const color = aoiColor(aoi.pct);
+          return (
+            <Polygon
+              key={aoi.id}
+              positions={aoi.ring}
+              pathOptions={{ color, weight: 2, fillColor: color, fillOpacity: 0.32 }}
+            >
+              <Tooltip permanent={true} direction="center" className="aoi-pct-label">
+                <strong>{aoi.pct}%</strong>
+                <br />
+                {aoiTierLabel(aoi.pct)}
+              </Tooltip>
+            </Polygon>
+          );
+        })}
+
+        {drawingRing.length > 0 && (
+          <Polygon
+            positions={drawingRing}
+            pathOptions={{ color: aoiColor(parseInt(pendingPct, 10) || 0), weight: 2, dashArray: "6 6", fillOpacity: 0.15 }}
+          />
+        )}
+        {drawingRing.map((pt, i) => (
+          <CircleMarker
+            key={i}
+            center={pt}
+            radius={4}
+            pathOptions={{ color: "#05070c", weight: 1, fillColor: "#ffffff", fillOpacity: 1 }}
+          />
+        ))}
       </MapContainer>
 
       {points.length > 0 && (
@@ -343,6 +475,20 @@ export default function ForecastCreator({ seedStorm }) {
               {cat.label}
             </span>
           ))}
+        </div>
+        <div className="legend-row">
+          <span className="legend-item">
+            <span className="legend-swatch-dot" style={{ background: aoiColor(20) }} />
+            Formation chance: Low
+          </span>
+          <span className="legend-item">
+            <span className="legend-swatch-dot" style={{ background: aoiColor(50) }} />
+            Medium
+          </span>
+          <span className="legend-item">
+            <span className="legend-swatch-dot" style={{ background: aoiColor(80) }} />
+            High
+          </span>
         </div>
       </div>
     </div>
