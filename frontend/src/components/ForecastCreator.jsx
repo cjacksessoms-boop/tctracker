@@ -265,7 +265,7 @@ export default function ForecastCreator({ seedStorm }) {
           // top of each other - matches the look of NHC's own cone
           // graphics, where the time labels zigzag left/right of the line.
           const side = i % 2 === 0 ? "right" : "left";
-          const offsetX = side === "right" ? 14 : -14;
+          const offsetX = side === "right" ? 46 : -46;
 
           return (
             <CircleMarker

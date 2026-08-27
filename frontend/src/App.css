@@ -1224,12 +1224,38 @@ button { font-family: inherit; }
 
 .view-toggle { display: flex; gap: 6px; margin: 0 16px; }
 
-/* Permanent forecast-time labels in the Forecast Creator - a bit more
-   opaque than a normal hover tooltip since these stay visible
-   permanently over busy satellite imagery. */
+/* Permanent forecast-time labels in the Forecast Creator - plain
+   floating text (no box) connected to its point by a thin leader line,
+   matching the classic PAGASA/JTWC-style track graphic look rather than
+   a tooltip-card style. Legibility over busy satellite imagery comes
+   from a text-shadow instead of an opaque background. */
 .forecast-time-label {
-  background: rgba(11, 16, 28, 0.92) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: #ffffff !important;
   font-family: var(--font-mono) !important;
-  line-height: 1.4 !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
   white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.7);
 }
+/* Replace Leaflet's default small triangle pointer with a plain thin
+   straight line reaching back toward the marker. */
+.forecast-time-label::before {
+  display: none !important;
+}
+.leaflet-tooltip-right.forecast-time-label::after,
+.leaflet-tooltip-left.forecast-time-label::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 34px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.75);
+  transform: translateY(-50%);
+}
+.leaflet-tooltip-right.forecast-time-label::after { right: 100%; }
+.leaflet-tooltip-left.forecast-time-label::after { left: 100%; }
