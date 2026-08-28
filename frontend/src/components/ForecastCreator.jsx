@@ -1,4 +1,5 @@
 import { useState } from "react";
+import L from "leaflet";
 import polygonClipping from "polygon-clipping";
 import {
   MapContainer,
@@ -6,10 +7,11 @@ import {
   Polyline,
   Polygon,
   CircleMarker,
+  Marker,
   Tooltip,
   useMapEvents,
 } from "react-leaflet";
-import { classifyIntensity, INTENSITY_SCALE } from "../utils/intensity.js";
+import { classifyIntensity, categoryNumber, INTENSITY_SCALE } from "../utils/intensity.js";
 
 // Clicking the map adds a new forecast point. Each click is treated as
 // the next forecast hour in the sequence (+12h from the previous one) -
@@ -26,6 +28,38 @@ const SPECIAL_CLASSIFICATIONS = {
   INVEST: { label: "Invest", short: "INVEST", color: "#94a3b8" },
   EXTRATROPICAL: { label: "Extratropical", short: "EX", color: "#a78bfa" },
 };
+
+// Smooths a jagged sequence of points into a curve by sampling several
+// interpolated points between each pair, instead of connecting them
+// with hard straight-line segments - this is what removes the sharp
+// angular look from the track line.
+function catmullRom(pts, segmentsPerSpan = 12) {
+  if (pts.length < 3) return pts;
+  const at = (i) => pts[Math.max(0, Math.min(pts.length - 1, i))];
+  const result = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    for (let s = 0; s < segmentsPerSpan; s++) {
+      const t = s / segmentsPerSpan;
+      const t2 = t * t, t3 = t2 * t;
+      const lat =
+        0.5 *
+        (2 * p1[0] +
+          (-p0[0] + p2[0]) * t +
+          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+      const lon =
+        0.5 *
+        (2 * p1[1] +
+          (-p0[1] + p2[1]) * t +
+          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+      result.push([lat, lon]);
+    }
+  }
+  result.push(pts[pts.length - 1]);
+  return result;
+}
 
 function pointClassification(p) {
   return p.override ? SPECIAL_CLASSIFICATIONS[p.override] : classifyIntensity(p.wind);
@@ -72,6 +106,55 @@ function convexHull(pts) {
 }
 
 const CIRCLE_SAMPLES = 24;
+
+// Smooths the visual track LINE (not the cone, which already uses a
+// different, more robust circle-union method) by interpolating a curve
+// through the clicked points instead of connecting them with straight
+// segments - removes the sharp angular look between points.
+function catmullRomLine(points, segmentsPerSpan = 12) {
+  if (points.length < 3) return points;
+  const at = (i) => points[Math.max(0, Math.min(points.length - 1, i))];
+  const result = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    for (let s = 0; s < segmentsPerSpan; s++) {
+      const t = s / segmentsPerSpan;
+      const t2 = t * t, t3 = t2 * t;
+      const lat =
+        0.5 *
+        (2 * p1[0] +
+          (-p0[0] + p2[0]) * t +
+          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+      const lon =
+        0.5 *
+        (2 * p1[1] +
+          (-p0[1] + p2[1]) * t +
+          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+      result.push([lat, lon]);
+    }
+  }
+  result.push(points[points.length - 1]);
+  return result;
+}
+
+// A uniform-color, numbered marker style - hurricane categories 1-5
+// show their number, tropical storm/depression strength (and Invest/
+// Extratropical overrides) show a plain blank badge. This is a clean,
+// reliable div-based badge rather than hand-drawn spiral artwork, since
+// custom vector icons are hard to get right without being able to
+// preview the actual rendered result.
+const STORM_SYMBOL_COLOR = "#8b1a1a";
+function buildStormIcon(p) {
+  const num = p.override ? null : categoryNumber(p.wind);
+  return L.divIcon({
+    className: "storm-symbol-icon",
+    html: `<div class="storm-symbol-badge">${num ?? ""}</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  });
+}
 
 function pointRadiusDeg(p) {
   const steps = p.hour / HOUR_STEP;
@@ -247,6 +330,7 @@ export default function ForecastCreator({ seedStorm }) {
   const coneSegments = buildConeSegments(points);
   const coneUnion = unionSegments(coneSegments);
   const trackPositions = points.map((p) => [p.lat, p.lon]);
+  const smoothedTrack = catmullRom(trackPositions);
   const mapCenter = points.length > 0 ? trackPositions[trackPositions.length - 1] : [20, -60];
 
   return (
@@ -355,11 +439,14 @@ export default function ForecastCreator({ seedStorm }) {
         )}
 
         {trackPositions.length > 1 && (
-          <Polyline positions={trackPositions} pathOptions={{ color: "#ffffff", weight: 2, opacity: 0.9 }} />
+          <Polyline
+            positions={catmullRomLine(trackPositions)}
+            pathOptions={{ color: "#ffffff", weight: 2, opacity: 0.9 }}
+          />
         )}
 
         {points.map((p, i) => {
-          const { color, short } = pointClassification(p);
+          const { short } = pointClassification(p);
           const detail = p.override ? short : `${p.wind} kt · ${short}`;
           // Stagger labels on a 4-way rotation (not just left/right) so
           // consecutive labels get more separation from both the track
@@ -369,12 +456,7 @@ export default function ForecastCreator({ seedStorm }) {
           const offsetY = Math.floor(i / 2) % 2 === 0 ? -16 : 16;
 
           return (
-            <CircleMarker
-              key={i}
-              center={[p.lat, p.lon]}
-              radius={7}
-              pathOptions={{ color: "#05070c", weight: 1.5, fillColor: color, fillOpacity: 0.95 }}
-            >
+            <Marker key={i} position={[p.lat, p.lon]} icon={buildStormIcon(p)}>
               {baseTime ? (
                 <Tooltip
                   direction={side}
@@ -390,7 +472,7 @@ export default function ForecastCreator({ seedStorm }) {
                   +{p.hour}h · {detail}
                 </Tooltip>
               )}
-            </CircleMarker>
+            </Marker>
           );
         })}
         {aois.map((aoi) => {

@@ -33,6 +33,21 @@ export const INTENSITY_SCALE = SCALE.map(({ label, short, color }) => ({
   color,
 }));
 
+// Returns the hurricane category NUMBER (1-5), or null for anything
+// below hurricane strength (TD/TS) - used for numbered marker styles
+// like the classic PAGASA/JTWC track-graphic symbols, where a plain
+// spiral means "tropical storm or weaker" and a numbered spiral means
+// "hurricane/typhoon of that category."
+export function categoryNumber(vmaxKt) {
+  const kt = typeof vmaxKt === "string" ? parseFloat(vmaxKt) : vmaxKt;
+  if (kt == null || Number.isNaN(kt) || kt < 64) return null;
+  if (kt < 83) return 1;
+  if (kt < 96) return 2;
+  if (kt < 113) return 3;
+  if (kt < 137) return 4;
+  return 5;
+}
+
 // Major hurricane = Cat 3+. Worth calling out separately in the UI
 // because it's the threshold operational products emphasize.
 export function isMajor(vmaxKt) {
